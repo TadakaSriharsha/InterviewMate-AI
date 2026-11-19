@@ -5,6 +5,23 @@ document.addEventListener("DOMContentLoaded", function () {
         function updateWordCount() {
             const words = answerField.value.trim().match(/\S+/g) || [];
             wordCount.textContent = `${words.length} ${words.length === 1 ? "word" : "words"}`;
+
+            const text = answerField.value.toLowerCase();
+            const detailCheck = document.querySelector("#check-detail");
+            const structureCheck = document.querySelector("#check-structure");
+            const exampleCheck = document.querySelector("#check-example");
+
+            if (detailCheck) {
+                detailCheck.dataset.state = words.length >= 25 ? "ready" : "pending";
+            }
+            if (structureCheck) {
+                const hasStructure = /first|then|next|finally|however|because|therefore/.test(text);
+                structureCheck.dataset.state = hasStructure ? "ready" : "pending";
+            }
+            if (exampleCheck) {
+                const hasExample = /for example|for instance|in my|when i|i used|we used|project|as a result/.test(text);
+                exampleCheck.dataset.state = hasExample ? "ready" : "pending";
+            }
         }
 
         answerField.addEventListener("input", updateWordCount);

@@ -29,8 +29,42 @@
             <h4>Your Answer:</h4>
             <p>{{ answers[loop.index0] }}</p>
 
+            <div class="answer-score-row">
+                <div class="answer-score">{{ scores[loop.index0] }}/100</div>
+                <p><strong>Answer score</strong></p>
+            </div>
+
+            <div class="dimension-grid">
+                {% for name, value in dimension_scores[loop.index0].items() %}
+                <div class="dimension">
+                    <div class="dimension-label">
+                        <span>{{ name }}</span>
+                        <strong>{{ value }}</strong>
+                    </div>
+                    <div class="dimension-track">
+                        <span style="--dimension: {{ value }}%"></span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
             <h4>Feedback:</h4>
             <p>{{ feedback_list[loop.index0] }}</p>
+
+            {% if strength_lists[loop.index0] %}
+            <p class="feedback-points"><strong>Strengths:</strong> {{ strength_lists[loop.index0]|join(", ") }}</p>
+            {% endif %}
+
+            {% if suggestion_lists[loop.index0] %}
+            <div class="improvement-box">
+                <strong>How to improve</strong>
+                <ul>
+                    {% for suggestion in suggestion_lists[loop.index0] %}
+                    <li>{{ suggestion }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
         </div>
     {% endfor %}
 
