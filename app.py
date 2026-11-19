@@ -223,6 +223,140 @@ DIFFICULTIES = ("Beginner", "Intermediate", "Advanced")
 QUESTIONS_PER_INTERVIEW = 5
 
 
+ROLE_KEYWORDS = {
+    "Python Developer": (
+        "python", "function", "class", "list", "tuple", "dictionary", "api",
+        "test", "exception", "async", "thread", "process", "memory", "data",
+    ),
+    "Web Developer": (
+        "html", "css", "javascript", "browser", "api", "state", "component",
+        "responsive", "accessibility", "test", "performance", "cache",
+    ),
+    "Java Developer": (
+        "java", "class", "object", "interface", "thread", "spring", "stream",
+        "exception", "garbage", "jvm", "memory", "test", "api",
+    ),
+}
+
+
+def evaluate_answer(answer, role):
+    words = answer.split()
+    word_count = len(words)
+    normalized = answer.lower()
+    sentences = [
+        part.strip()
+        for part in normalized.replace("!", ".").replace("?", ".").split(".")
+        if part.strip()
+    ]
+
+    if word_count >= 55:
+        completeness = 100
+    elif word_count >= 40:
+        completeness = 90
+    elif word_count >= 25:
+        completeness = 75
+    elif word_count >= 12:
+        completeness = 55
+    else:
+        completeness = 35
+
+    average_sentence_length = word_count / max(len(sentences), 1)
+    if 8 <= average_sentence_length <= 28:
+        clarity = 90
+    elif 5 <= average_sentence_length <= 35:
+        clarity = 75
+    else:
+        clarity = 55
+
+    keywords = ROLE_KEYWORDS.get(role, ())
+    relevance_matches = sum(
+        1 for keyword in keywords
+        if keyword in normalized
+    )
+    if relevance_matches >= 4:
+        relevance = 100
+    elif relevance_matches >= 2:
+        relevance = 80
+    elif relevance_matches == 1:
+        relevance = 65
+    else:
+        relevance = 45
+
+    example_markers = (
+        "for example", "for instance", "in my", "when i", "i used",
+        "we used", "in a project", "this resulted", "as a result",
+    )
+    if any(marker in normalized for marker in example_markers):
+        evidence = 100
+    elif word_count >= 35:
+        evidence = 70
+    else:
+        evidence = 45
+
+    structure_markers = (
+        "first", "then", "next", "finally", "because", "so that",
+        "however", "trade-off", "approach", "result",
+    )
+    structure_hits = sum(
+        1 for marker in structure_markers
+        if marker in normalized
+    )
+    structure = min(100, 50 + (structure_hits * 10))
+
+    dimensions = {
+        "Completeness": completeness,
+        "Clarity": clarity,
+        "Relevance": relevance,
+        "Evidence": evidence,
+        "Structure": structure,
+    }
+    score = round(
+        (completeness * 0.30)
+        + (clarity * 0.20)
+        + (relevance * 0.20)
+        + (evidence * 0.15)
+        + (structure * 0.15)
+    )
+
+    strengths = [
+        name for name, value in dimensions.items()
+        if value >= 80
+    ]
+    weak_dimensions = [
+        name for name, value in dimensions.items()
+        if value < 70
+    ]
+
+    suggestions = []
+    if "Completeness" in weak_dimensions:
+        suggestions.append("Add more detail about the reasoning, trade-offs, and expected outcome.")
+    if "Clarity" in weak_dimensions:
+        suggestions.append("Use shorter sentences and explain one idea at a time.")
+    if "Relevance" in weak_dimensions:
+        suggestions.append("Connect the answer directly to {} concepts and terminology.".format(role))
+    if "Evidence" in weak_dimensions:
+        suggestions.append("Include a concrete project example or describe how you verified the result.")
+    if "Structure" in weak_dimensions:
+        suggestions.append("Organize the response with a brief approach, key steps, and conclusion.")
+
+    if score >= 85:
+        summary = "Strong, well-rounded answer."
+    elif score >= 70:
+        summary = "Good foundation with clear room to sharpen the response."
+    elif score >= 55:
+        summary = "Partially developed answer; expand and organize the explanation."
+    else:
+        summary = "Early-stage answer; add detail, role-specific terms, and a concrete example."
+
+    feedback = summary
+    if strengths:
+        feedback += " Strengths: {}.".format(", ".join(strengths[:2]))
+    if suggestions:
+        feedback += " Improve: {}".format(" ".join(suggestions[:2]))
+
+    return score, feedback, dimensions, strengths, weak_dimensions, suggestions
+
+
 def login_required(function):
     @wraps(function)
     def wrapper(*args, **kwargs):
@@ -453,6 +587,16 @@ def dashboard():
         (session["user_id"],)
     ).fetchall()
 
+    stats = connection.execute(
+        """SELECT
+               COUNT(*) AS answer_count,
+               ROUND(AVG(score), 1) AS average_score,
+               MAX(score) AS best_score
+           FROM interviews
+           WHERE user_id = ?""",
+        (session["user_id"],)
+    ).fetchone()
+
     connection.close()
 
     return render_template(
@@ -460,7 +604,8 @@ def dashboard():
         name=session["name"],
         roles=QUESTIONS.keys(),
         difficulties=DIFFICULTIES,
-        history=history
+        history=history,
+        stats=stats
     )
 
 
@@ -622,25 +767,21 @@ def result():
     ):
         return redirect(url_for("dashboard"))
 
-    # Starter evaluation: answer completeness, not AI evaluation.
     scores = []
     feedback_list = []
+    dimension_scores = []
+    strength_lists = []
+    suggestion_lists = []
 
     for answer in answers:
-        word_count = len(answer.split())
-
-        if word_count >= 40:
-            score = 90
-            feedback = "Good detail. Try adding a practical example."
-        elif word_count >= 20:
-            score = 75
-            feedback = "Good start. Explain your answer in more detail."
-        else:
-            score = 50
-            feedback = "Try giving a longer and more complete answer."
-
+        score, feedback, dimensions, strengths, weak_dimensions, suggestions = evaluate_answer(
+            answer, role
+        )
         scores.append(score)
         feedback_list.append(feedback)
+        dimension_scores.append(dimensions)
+        strength_lists.append(strengths)
+        suggestion_lists.append(suggestions)
 
     overall_score = round(sum(scores) / len(scores))
 
@@ -675,7 +816,11 @@ def result():
         difficulty=difficulty,
         feedback_list=feedback_list,
         answers=answers,
-        questions=questions
+        questions=questions,
+        scores=scores,
+        dimension_scores=dimension_scores,
+        strength_lists=strength_lists,
+        suggestion_lists=suggestion_lists
     )
 
 

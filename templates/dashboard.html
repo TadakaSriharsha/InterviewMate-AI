@@ -27,6 +27,23 @@
         {% endfor %}
     {% endwith %}
 
+    {% if stats.answer_count %}
+    <section class="progress-summary" aria-label="Practice statistics">
+        <div class="stat-card">
+            <strong>{{ stats.answer_count }}</strong>
+            <span>Answers scored</span>
+        </div>
+        <div class="stat-card">
+            <strong>{{ stats.average_score }}/100</strong>
+            <span>Average score</span>
+        </div>
+        <div class="stat-card">
+            <strong>{{ stats.best_score }}/100</strong>
+            <span>Best answer</span>
+        </div>
+    </section>
+    {% endif %}
+
     <section class="dashboard-card">
         <div class="section-heading">
             <div>
