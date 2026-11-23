@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} · InterviewMate AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</head>
+<body class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" href="/dashboard"><span class="brand-mark">IM</span><span>InterviewMate <b>AI</b></span></a>
+        <nav class="side-nav">
+            <a class="{{ 'active' if active == 'dashboard' else '' }}" href="/dashboard"><span>⌂</span> Dashboard</a>
+            <a class="{{ 'active' if active == 'studio' else '' }}" href="/studio"><span>◉</span> Mock Interview</a>
+            <a class="{{ 'active' if active == 'resume' else '' }}" href="/resume-lab"><span>▤</span> Resume Lab</a>
+            <a class="{{ 'active' if active == 'jobs' else '' }}" href="/job-analyzer"><span>⌕</span> Job Analyzer</a>
+            <a class="{{ 'active' if active == 'coding' else '' }}" href="/coding"><span>&lt;/&gt;</span> Coding Arena</a>
+            <a class="{{ 'active' if active == 'questions' else '' }}" href="/questions"><span>?</span> Question Library</a>
+            <a class="{{ 'active' if active == 'answer' else '' }}" href="/answer-studio"><span>✦</span> Answer Studio</a>
+            <a class="{{ 'active' if active == 'roadmap' else '' }}" href="/roadmap"><span>↗</span> Career Roadmap</a>
+            <a class="{{ 'active' if active == 'challenge' else '' }}" href="/challenge"><span>⚡</span> Daily Challenge</a>
+            <a class="{{ 'active' if active == 'history' else '' }}" href="/history"><span>◷</span> Interview History</a>
+        </nav>
+        <div class="sidebar-footer">
+            <a class="{{ 'active' if active == 'settings' else '' }}" href="/settings">⚙ Settings</a>
+            <a href="/logout">↪ Sign out</a>
+        </div>
+    </aside>
+
+    <main class="app-main">
+        <header class="app-header">
+            <button class="menu-toggle" type="button" aria-label="Toggle navigation">☰</button>
+            <div>
+                <p class="eyebrow">INTERVIEWMATE WORKSPACE</p>
+                <h1>{{ title }}</h1>
+            </div>
+            <div class="profile-chip"><span>{{ name[0]|upper }}</span><div><strong>{{ name }}</strong><small>Focused learner</small></div></div>
+        </header>
+
+        {% with messages = get_flashed_messages() %}
+            {% for message in messages %}<div class="toast">{{ message }}</div>{% endfor %}
+        {% endwith %}
+
+        <p class="workspace-subtitle">{{ subtitle }}</p>
+
+        {% if active == 'studio' %}
+        <form action="/interview" method="POST" class="panel studio-form">
+            <div class="setup-grid">
+                <label>Interview category<select name="role">{% for role in roles %}<option>{{ role }}</option>{% endfor %}</select></label>
+                <label>Difficulty<select name="difficulty">{% for level in difficulties %}<option>{{ level }}</option>{% endfor %}</select></label>
+                <label>Question count<select><option>5 questions</option></select></label>
+                <label>Answer timer<select name="answer_time"><option value="60">1 minute</option><option value="90">1.5 minutes</option><option value="120" selected>2 minutes</option><option value="180">3 minutes</option><option value="300">5 minutes</option></select></label>
+            </div>
+            <button type="submit">Start interview</button>
+        </form>
+        {% elif active == 'resume' %}
+        <div class="workspace-grid">
+            <form method="POST" class="panel"><label>Paste resume text<textarea name="resume_text" rows="14" placeholder="Paste resume content here..."></textarea></label><button type="submit">Analyze resume</button></form>
+            {% if analysis %}<section class="panel result-panel"><p class="eyebrow">TEXT-BASED ANALYSIS</p><h2>Your preparation plan</h2><h3>Detected skills</h3><div class="tag-list">{% for skill in analysis.skills %}<span>{{ skill }}</span>{% endfor %}</div><h3>Strength</h3><p>{{ analysis.strength }}</p><h3>Areas to improve</h3><ul>{% for item in analysis.missing %}<li>{{ item }}</li>{% endfor %}</ul><h3>Generated questions</h3><ul>{% for item in analysis.questions %}<li>{{ item }}</li>{% endfor %}</ul></section>{% endif %}
+        </div>
+        {% elif active == 'jobs' %}
+        <div class="workspace-grid">
+            <form method="POST" class="panel"><label>Job description<textarea name="job_text" rows="10" placeholder="Paste the job description..."></textarea></label><label>Resume text (optional)<textarea name="resume_text" rows="8" placeholder="Paste your resume for a transparent keyword comparison..."></textarea></label><button type="submit">Analyze compatibility</button></form>
+            {% if analysis %}<section class="panel result-panel"><p class="eyebrow">MATCHING NOTE: KEYWORD-BASED ESTIMATE</p><div class="score-ring" style="--score: {{ analysis.compatibility }}"><strong>{{ analysis.compatibility }}%</strong><span>skill overlap</span></div><h3>Required skills</h3><div class="tag-list">{% for skill in analysis.required %}<span>{{ skill }}</span>{% endfor %}</div><h3>Matched skills</h3><p>{{ analysis.shared|join(', ') or 'No matches detected' }}</p><h3>Potential gaps</h3><p>{{ analysis.gaps|join(', ') or 'No major gaps detected in the supplied text' }}</p><h3>Preparation roadmap</h3><ul>{% for item in analysis.roadmap %}<li>{{ item }}</li>{% endfor %}</ul></section>{% endif %}
+        </div>
+        {% elif active == 'coding' %}
+        <section class="problem-grid">{% for problem in problems %}<article class="panel problem-card"><div><span class="level-badge">{{ problem.difficulty }}</span><small>{{ problem.language }} · {{ problem.topic }}</small></div><h2>{{ problem.title }}</h2><p>Practice the algorithm, explain your approach, and analyze time and space complexity.</p><button type="button" class="secondary-button">Open practice</button></article>{% endfor %}</section>
+        {% elif active == 'questions' %}
+        <form class="filter-bar panel" method="GET"><input name="q" placeholder="Search questions"><select name="category"><option value="">All categories</option>{% for category in categories %}<option>{{ category }}</option>{% endfor %}</select><select name="difficulty"><option value="">All difficulties</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select><button type="submit">Filter</button></form>
+        <section class="question-list">{% for item in questions %}<article class="panel question-row"><div><span class="level-badge">{{ item.difficulty }}</span><small>{{ item.category }}</small></div><h2>{{ item.question }}</h2><details><summary>View explanation</summary><p>{{ item.answer }}</p></details></article>{% endfor %}{% if not questions %}<div class="panel empty-state"><h2>No questions found</h2><p>Try clearing a filter or searching with different terms.</p></div>{% endif %}</section>
+        {% elif active == 'answer' %}
+        <div class="workspace-grid"><form method="POST" class="panel"><label>Your interview answer<textarea name="answer" rows="12" placeholder="Paste or write an answer..."></textarea></label><button type="submit">Improve answer</button></form>{% if result %}<section class="panel result-panel"><p class="eyebrow">STRUCTURE SCORE</p><div class="score-ring" style="--score: {{ result.score }}"><strong>{{ result.score }}</strong><span>/100</span></div><h3>Missing points</h3><ul>{% for item in result.missing %}<li>{{ item }}</li>{% endfor %}</ul><h3>STRONGER SAMPLE STRUCTURE</h3><p>{{ result.sample }}</p></section>{% endif %}</div>
+        {% elif active == 'roadmap' %}
+        <section class="roadmap-grid"><div class="panel"><p class="eyebrow">THIS WEEK</p><h2>Your preparation plan</h2>{% for task in tasks %}<label class="task-row"><input type="checkbox" {% if task.done %}checked{% endif %}><span><strong>{{ task.title }}</strong><small>{{ task.detail }}</small></span></label>{% endfor %}</div><aside class="panel"><p class="eyebrow">TARGET TRACK</p><h2>Software Developer</h2><p>Build consistency with one concept, one practice answer, and one timed interview per week.</p></aside></section>
+        {% elif active == 'challenge' %}
+        <section class="panel challenge-panel"><div class="challenge-meta"><span class="level-badge">{{ challenge.difficulty }}</span><span>{{ challenge.category }}</span></div><h2>{{ challenge.question }}</h2><form method="POST"><textarea name="answer" rows="8" placeholder="Write your answer..." required></textarea><button type="submit">Submit for feedback</button></form>{% if challenge_result %}<div class="challenge-result"><div class="score-ring" style="--score: {{ challenge_result.score }}"><strong>{{ challenge_result.score }}</strong><span>/100</span></div><p>{{ challenge_result.feedback }}</p>{% if challenge_result.suggestions %}<div class="improvement-box"><strong>Next steps</strong><ul>{% for suggestion in challenge_result.suggestions %}<li>{{ suggestion }}</li>{% endfor %}</ul></div>{% endif %}</div>{% endif %}</section>
+        {% elif active == 'history' %}
+        <section class="history-table panel">{% if history %}<div class="history-actions"><a class="button" href="/history/export">Download CSV</a></div><div class="table-head"><span>Session</span><span>Difficulty</span><span>Score</span><span>Date</span></div>{% for item in history %}<div class="table-row"><div><strong>{{ item.role }}</strong><small>{{ item.question }}</small></div><span class="level-badge">{{ item.difficulty }}</span><strong>{{ item.score }}/100</strong><small>{{ item.created_at }}</small></div>{% endfor %}{% else %}<div class="empty-state"><h2>No interview sessions yet</h2><p>Complete your first mock interview to start your progress history.</p><a class="button" href="/studio">Start an interview</a></div>{% endif %}</section>
+        {% elif active == 'settings' %}
+        <form method="POST" class="panel settings-form"><div class="setup-grid"><label>Target career role<input name="target_role" value="{{ preferences.target_role if preferences else '' }}" placeholder="e.g. Software Developer"></label><label>Difficulty preference<select name="difficulty">{% for level in difficulties %}<option {% if preferences and preferences.difficulty == level %}selected{% endif %}>{{ level }}</option>{% endfor %}</select></label><label>Theme<select name="theme"><option value="dark" {% if preferences and preferences.theme == 'dark' %}selected{% endif %}>Dark</option><option value="light" {% if preferences and preferences.theme == 'light' %}selected{% endif %}>Light</option></select></label></div><button type="submit">Save preferences</button></form>
+        {% endif %}
+    </main>
+</body>
+</html>

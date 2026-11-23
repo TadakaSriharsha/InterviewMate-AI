@@ -35,6 +35,14 @@
         </div>
     </div>
 
+    <div class="answer-timer" id="answer-timer" data-seconds="{{ answer_time }}">
+        <div>
+            <span class="timer-label">ANSWER TIME</span>
+            <strong id="timer-value">{{ answer_time // 60 }}:{{ '%02d' % (answer_time % 60) }}</strong>
+        </div>
+        <span id="timer-status">Time to structure your answer</span>
+    </div>
+
     <div class="question-card">
         <p class="eyebrow">YOUR QUESTION</p>
         <h2>{{ question }}</h2>

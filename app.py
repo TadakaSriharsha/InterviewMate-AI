@@ -14,6 +14,8 @@ import random
 import smtplib
 import urllib.error
 import urllib.request
+import csv
+import io
 from email.mime.text import MIMEText
 
 load_dotenv()
@@ -597,7 +599,33 @@ def dashboard():
         (session["user_id"],)
     ).fetchone()
 
+    weekly = connection.execute(
+        """SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS answers,
+                  ROUND(AVG(score), 1) AS score
+           FROM interviews
+           WHERE user_id = ? AND created_at >= datetime('now', '-7 days')
+           GROUP BY substr(created_at, 1, 10)
+           ORDER BY day""",
+        (session["user_id"],)
+    ).fetchall()
+
+    role_counts = connection.execute(
+        """SELECT role, COUNT(*) AS count, ROUND(AVG(score), 1) AS avg_score
+           FROM interviews WHERE user_id = ?
+           GROUP BY role ORDER BY count DESC LIMIT 3""",
+        (session["user_id"],)
+    ).fetchall()
+
     connection.close()
+
+    answer_count = stats["answer_count"] or 0
+    average_score = stats["average_score"] or 0
+    practice_hours = round(answer_count * 3 / 60, 1)
+    interview_count = max(1, (answer_count + 4) // 5) if answer_count else 0
+    xp = answer_count * 20 + int((average_score or 0) * 2)
+    streak = min(answer_count, 7)
+    weekly_labels = [row["day"][-5:] for row in weekly]
+    weekly_values = [row["score"] or 0 for row in weekly]
 
     return render_template(
         "dashboard.html",
@@ -605,7 +633,15 @@ def dashboard():
         roles=QUESTIONS.keys(),
         difficulties=DIFFICULTIES,
         history=history,
-        stats=stats
+        stats=stats,
+        interview_count=interview_count,
+        practice_hours=practice_hours,
+        streak=streak,
+        xp=xp,
+        level=(xp // 500) + 1,
+        weekly_labels=json.dumps(weekly_labels),
+        weekly_values=json.dumps(weekly_values),
+        role_counts=role_counts
     )
 
 
@@ -615,6 +651,7 @@ def interview():
     if request.method == "POST":
         role = request.form.get("role")
         difficulty = request.form.get("difficulty")
+        answer_time = request.form.get("answer_time", "120")
 
         if role not in QUESTIONS:
             flash("Please select a valid job role.")
@@ -623,6 +660,13 @@ def interview():
         if difficulty not in DIFFICULTIES:
             flash("Please select a valid difficulty level.")
             return redirect(url_for("dashboard"))
+
+        try:
+            answer_time = int(answer_time)
+        except (TypeError, ValueError):
+            answer_time = 120
+        if answer_time not in (60, 90, 120, 180, 300):
+            answer_time = 120
 
         connection = get_db()
         completed_questions = {
@@ -657,6 +701,8 @@ def interview():
         session["interview_questions"] = interview_questions
         session["question_index"] = 0
         session["answers"] = []
+        session["answer_time"] = answer_time
+        session["started_at"] = datetime.now().isoformat()
 
         return redirect(url_for("interview"))
 
@@ -680,6 +726,7 @@ def interview():
         number=index + 1,
         total=len(questions),
         progress=round(index / len(questions) * 100),
+        answer_time=session.get("answer_time", 120),
         voice_enabled=bool(os.environ.get("OPENAI_API_KEY"))
     )
 
@@ -822,6 +869,259 @@ def result():
         strength_lists=strength_lists,
         suggestion_lists=suggestion_lists
     )
+
+
+QUESTION_LIBRARY = [
+    {"question": "Tell me about yourself.", "category": "HR", "difficulty": "Beginner", "answer": "Use a concise 60-second summary: present role, relevant strengths, and a goal connected to the position."},
+    {"question": "Describe a situation where you resolved a disagreement.", "category": "Behavioral", "difficulty": "Intermediate", "answer": "Apply STAR: describe the situation, your responsibility, the constructive action, and the measurable or observable result."},
+    {"question": "Explain the time complexity of binary search.", "category": "Algorithms", "difficulty": "Beginner", "answer": "Binary search halves the remaining sorted search space each iteration, giving O(log n) time and O(1) iterative space."},
+    {"question": "What is the difference between a process and a thread?", "category": "Java", "difficulty": "Intermediate", "answer": "Processes have separate address spaces; threads within a process share memory and resources. Threads require careful synchronization."},
+    {"question": "How would you optimize a slow SQL query?", "category": "SQL", "difficulty": "Intermediate", "answer": "Inspect the execution plan, validate indexes, reduce unnecessary columns and scans, improve predicates, and measure before and after."},
+    {"question": "Explain the bias-variance tradeoff.", "category": "AI & Machine Learning", "difficulty": "Advanced", "answer": "Bias is error from oversimplified assumptions; variance is sensitivity to training data. Tune model flexibility and validation strategy to balance them."},
+]
+
+
+@app.route("/history")
+@login_required
+def history_page():
+    connection = get_db()
+    history = connection.execute(
+        "SELECT * FROM interviews WHERE user_id = ? ORDER BY id DESC",
+        (session["user_id"],)
+    ).fetchall()
+    connection.close()
+    return render_template("workspace.html", name=session["name"], active="history",
+                           title="Interview History", subtitle="Review sessions and track your progress",
+                           history=history)
+
+
+@app.route("/history/export")
+@login_required
+def export_history():
+    connection = get_db()
+    history = connection.execute(
+        """SELECT role, difficulty, question, answer, score, feedback, created_at
+           FROM interviews WHERE user_id = ? ORDER BY id DESC""",
+        (session["user_id"],)
+    ).fetchall()
+    connection.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Role", "Difficulty", "Question", "Answer", "Score", "Feedback", "Date"])
+    for item in history:
+        writer.writerow([
+            item["role"], item["difficulty"], item["question"], item["answer"],
+            item["score"], item["feedback"], item["created_at"],
+        ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=interviewmate-history.csv"},
+    )
+
+
+@app.route("/studio")
+@login_required
+def studio():
+    return render_template("workspace.html", name=session["name"], active="studio",
+                           title="AI Mock Interview Studio",
+                           subtitle="Configure a focused, role-specific interview",
+                           roles=list(QUESTIONS.keys()), difficulties=DIFFICULTIES)
+
+
+@app.route("/resume-lab", methods=["GET", "POST"])
+@login_required
+def resume_lab():
+    analysis = None
+    if request.method == "POST":
+        resume_text = request.form.get("resume_text", "").strip()
+        if len(resume_text) < 30:
+            flash("Paste at least a short resume summary or add detailed resume text.")
+        else:
+            text = resume_text.lower()
+            skills = [s for s in ("Python", "Java", "JavaScript", "SQL", "React", "Spring", "AWS", "Docker", "Git", "Machine Learning")
+                      if s.lower() in text]
+            analysis = {
+                "skills": skills or ["Add specific technical skills"],
+                "strength": "The resume identifies work or study experience that can be expanded with measurable outcomes.",
+                "missing": ["Quantified achievements", "Relevant tools and technologies", "Concise project impact"],
+                "questions": [
+                    "Describe the most technically challenging project in this resume.",
+                    "What measurable impact did your work create?",
+                    "Which tool or technology in your resume would you improve first?",
+                ],
+            }
+    return render_template("workspace.html", name=session["name"], active="resume",
+                           title="Resume Lab", subtitle="Turn your resume into an interview preparation plan",
+                           analysis=analysis)
+
+
+@app.route("/job-analyzer", methods=["GET", "POST"])
+@login_required
+def job_analyzer():
+    analysis = None
+    if request.method == "POST":
+        job_text = request.form.get("job_text", "").strip()
+        resume_text = request.form.get("resume_text", "").strip()
+        if len(job_text) < 30:
+            flash("Paste a more detailed job description.")
+        else:
+            skill_catalog = ("Python", "Java", "JavaScript", "SQL", "React", "Spring", "AWS", "Docker", "Git", "Machine Learning")
+            required = [skill for skill in skill_catalog if skill.lower() in job_text.lower()]
+            resume_skills = [skill for skill in skill_catalog if resume_text and skill.lower() in resume_text.lower()]
+            gaps = [skill for skill in required if skill not in resume_skills]
+            shared = [skill for skill in required if skill in resume_skills]
+            compatibility = round((len(shared) / len(required) * 100) if required else 0)
+            analysis = {
+                "required": required or ["Add technical requirements from the job description"],
+                "gaps": gaps,
+                "shared": shared,
+                "compatibility": compatibility,
+                "roadmap": ["Prioritize the largest skill gaps", "Practice two role-specific scenarios", "Prepare evidence-based resume examples"],
+                "questions": [
+                    "How would you use {} in this role?".format(required[0] if required else "the required technologies"),
+                    "Tell me about a project that demonstrates your strongest relevant skill.",
+                    "How would you close the gaps in this job description?",
+                ],
+            }
+    return render_template("workspace.html", name=session["name"], active="jobs",
+                           title="Job Description Analyzer", subtitle="Find skill gaps and prepare a focused roadmap",
+                           analysis=analysis)
+
+
+@app.route("/coding")
+@login_required
+def coding_arena():
+    problems = [
+        {"title": "Two Sum", "difficulty": "Easy", "topic": "Arrays", "language": "Python"},
+        {"title": "Valid Parentheses", "difficulty": "Easy", "topic": "Stacks", "language": "Java"},
+        {"title": "Longest Unique Substring", "difficulty": "Medium", "topic": "Strings", "language": "JavaScript"},
+        {"title": "Nth Highest Salary", "difficulty": "Medium", "topic": "SQL", "language": "SQL"},
+    ]
+    return render_template("workspace.html", name=session["name"], active="coding",
+                           title="Coding Interview Arena", subtitle="Practice problems without executing code on the app server",
+                           problems=problems)
+
+
+@app.route("/questions")
+@login_required
+def question_library():
+    query = request.args.get("q", "").strip().lower()
+    category = request.args.get("category", "").strip()
+    difficulty = request.args.get("difficulty", "").strip()
+    items = QUESTION_LIBRARY
+    if query:
+        items = [i for i in items if query in i["question"].lower() or query in i["category"].lower()]
+    if category:
+        items = [i for i in items if i["category"] == category]
+    if difficulty:
+        items = [i for i in items if i["difficulty"] == difficulty]
+    categories = sorted(set(i["category"] for i in QUESTION_LIBRARY))
+    return render_template("workspace.html", name=session["name"], active="questions",
+                           title="Question Library", subtitle="Search, filter, and practice interview questions",
+                           questions=items, categories=categories)
+
+
+@app.route("/answer-studio", methods=["GET", "POST"])
+@login_required
+def answer_studio():
+    result = None
+    if request.method == "POST":
+        answer = request.form.get("answer", "").strip()
+        if len(answer) < 20:
+            flash("Enter at least a few sentences to improve.")
+        else:
+            lowered = answer.lower()
+            score = 50
+            score += 15 if len(answer.split()) >= 40 else 5
+            score += 10 if any(x in lowered for x in ("because", "for example", "for instance")) else 0
+            score += 10 if any(x in lowered for x in ("result", "outcome", "completed")) else 0
+            result = {
+                "score": min(score, 100),
+                "missing": ["A specific measurable result", "A concise explanation of your role"] if "result" not in lowered else ["One more concrete trade-off or lesson"],
+                "sample": "SITUATION: Describe the context briefly. TASK: State your responsibility. ACTION: Explain the specific steps you took and why. RESULT: Share an honest, measurable outcome and lesson.",
+            }
+    return render_template("workspace.html", name=session["name"], active="answer",
+                           title="Answer Improvement Studio", subtitle="Get practical, transparent feedback on your response",
+                           result=result)
+
+
+@app.route("/roadmap")
+@login_required
+def roadmap():
+    tasks = [
+        {"title": "Core concepts review", "detail": "Revisit 3 fundamentals in your target role", "done": False},
+        {"title": "Timed practice", "detail": "Complete one 5-question mock interview", "done": False},
+        {"title": "Answer practice", "detail": "Improve one behavioral answer with STAR", "done": False},
+    ]
+    return render_template("workspace.html", name=session["name"], active="roadmap",
+                           title="Career Preparation Roadmap", subtitle="A realistic weekly plan built around consistent practice",
+                           tasks=tasks)
+
+
+@app.route("/challenge", methods=["GET", "POST"])
+@login_required
+def challenge():
+    question = QUESTION_LIBRARY[(datetime.now().timetuple().tm_yday - 1) % len(QUESTION_LIBRARY)]
+    result = None
+    if request.method == "POST":
+        answer = request.form.get("answer", "").strip()
+        if len(answer.split()) < 12:
+            flash("Write at least a few detailed sentences before submitting.")
+        else:
+            score, feedback, dimensions, strengths, weak_dimensions, suggestions = evaluate_answer(
+                answer, "Web Developer"
+            )
+            connection = get_db()
+            connection.execute(
+                """INSERT INTO interviews
+                   (user_id, role, difficulty, question, answer, score, feedback)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (session["user_id"], "Daily Challenge", question["difficulty"],
+                 question["question"], answer, score, feedback)
+            )
+            connection.commit()
+            connection.close()
+            result = {
+                "score": score,
+                "feedback": feedback,
+                "strengths": strengths,
+                "suggestions": suggestions,
+            }
+    return render_template("workspace.html", name=session["name"], active="challenge",
+                           title="Daily Interview Challenge", subtitle="Today's focused practice",
+                           challenge=question, challenge_result=result)
+
+
+@app.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    connection = get_db()
+    preferences = connection.execute(
+        "SELECT * FROM user_preferences WHERE user_id = ?", (session["user_id"],)
+    ).fetchone()
+    if request.method == "POST":
+        target_role = request.form.get("target_role", "").strip()
+        difficulty = request.form.get("difficulty", "Intermediate")
+        theme = request.form.get("theme", "dark")
+        connection.execute(
+            """INSERT INTO user_preferences (user_id, target_role, difficulty, theme)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+               target_role=excluded.target_role, difficulty=excluded.difficulty, theme=excluded.theme""",
+            (session["user_id"], target_role, difficulty, theme)
+        )
+        connection.commit()
+        flash("Your preferences have been saved.")
+        preferences = connection.execute(
+            "SELECT * FROM user_preferences WHERE user_id = ?", (session["user_id"],)
+        ).fetchone()
+    connection.close()
+    return render_template("workspace.html", name=session["name"], active="settings",
+                           title="Settings", subtitle="Personalize your InterviewMate experience",
+                           preferences=preferences, difficulties=DIFFICULTIES)
 
 
 if __name__ == "__main__":
