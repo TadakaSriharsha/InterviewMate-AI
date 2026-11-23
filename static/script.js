@@ -96,6 +96,12 @@ document.addEventListener("DOMContentLoaded", function () {
         if (savedDraft && !answerField.value) {
             answerField.value = savedDraft;
         }
+        const answerForm = answerField.closest("form");
+        if (answerForm) {
+            answerForm.addEventListener("submit", function () {
+                localStorage.removeItem("interviewmate-answer-draft");
+            });
+        }
         updateWordCount();
     }
 
