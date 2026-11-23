@@ -1,4 +1,23 @@
 document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".save-question").forEach(function (button) {
+        button.addEventListener("click", async function () {
+            const form = new URLSearchParams({
+                question: button.dataset.question,
+                category: button.dataset.category,
+                difficulty: button.dataset.difficulty
+            });
+            const response = await fetch("/questions/save", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: form
+            });
+            if (response.ok) {
+                const data = await response.json();
+                button.classList.toggle("saved", data.saved);
+                button.textContent = data.saved ? "Saved" : "Save";
+            }
+        });
+    });
     const savedTheme = localStorage.getItem("interviewmate-theme");
     if (savedTheme === "light") document.body.classList.add("light-mode");
     const themeSelect = document.querySelector('select[name="theme"]');
