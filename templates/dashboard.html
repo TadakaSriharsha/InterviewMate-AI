@@ -3,105 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - InterviewMate AI</title>
+    <title>Dashboard · InterviewMate AI</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
 </head>
-<body>
+<body class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" href="/dashboard"><span class="brand-mark">IM</span><span>InterviewMate <b>AI</b></span></a>
+        <nav class="side-nav">
+            <a class="active" href="/dashboard"><span>⌂</span> Dashboard</a>
+            <a href="/studio"><span>◉</span> Mock Interview</a>
+            <a href="/resume-lab"><span>▤</span> Resume Lab</a>
+            <a href="/job-analyzer"><span>⌕</span> Job Analyzer</a>
+            <a href="/coding"><span>&lt;/&gt;</span> Coding Arena</a>
+            <a href="/questions"><span>?</span> Question Library</a>
+            <a href="/answer-studio"><span>✦</span> Answer Studio</a>
+            <a href="/roadmap"><span>↗</span> Career Roadmap</a>
+            <a href="/challenge"><span>⚡</span> Daily Challenge</a>
+            <a href="/history"><span>◷</span> Interview History</a>
+        </nav>
+        <div class="sidebar-footer"><a href="/settings">⚙ Settings</a><a href="/logout">↪ Sign out</a></div>
+    </aside>
 
-<header>
-    <div class="logo">InterviewMate <span>AI</span></div>
-    <nav>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/logout">Logout</a>
-    </nav>
-</header>
+    <main class="app-main">
+        <header class="app-header">
+            <button class="menu-toggle" type="button" aria-label="Toggle navigation">☰</button>
+            <div><p class="eyebrow">MONDAY OVERVIEW</p><h1>Welcome back, {{ name.split()[0] }} <span>👋</span></h1></div>
+            <div class="header-actions"><a class="icon-button" href="/challenge" title="Daily challenge">⚡</a><div class="profile-chip"><span>{{ name[0]|upper }}</span><div><strong>{{ name }}</strong><small>Level {{ level }}</small></div></div></div>
+        </header>
 
-<main class="dashboard">
-    <p class="tag">YOUR PRACTICE SPACE</p>
-    <h1>Hello, {{ name }}!</h1>
-    <p>Build confidence with focused, role-specific interview practice.</p>
+        {% with messages = get_flashed_messages() %}
+            {% for message in messages %}<div class="toast">{{ message }}</div>{% endfor %}
+        {% endwith %}
 
-    {% with messages = get_flashed_messages() %}
-        {% for message in messages %}
-            <p class="message">{{ message }}</p>
-        {% endfor %}
-    {% endwith %}
+        <section class="metric-grid">
+            <article class="metric-card readiness"><div class="metric-icon">◎</div><div><p>Interview readiness</p><strong>{{ stats.average_score or 0 }}<small>/100</small></strong></div><div class="mini-ring" style="--score: {{ stats.average_score or 0 }}"><span>{{ stats.average_score or 0 }}%</span></div></article>
+            <article class="metric-card"><div class="metric-icon violet">✓</div><div><p>Interviews completed</p><strong>{{ interview_count }}</strong><small>Based on saved answers</small></div></article>
+            <article class="metric-card"><div class="metric-icon cyan">◷</div><div><p>Practice hours</p><strong>{{ practice_hours }}<small>h</small></strong><small>Estimated from sessions</small></div></article>
+            <article class="metric-card"><div class="metric-icon amber">⚡</div><div><p>Learning streak</p><strong>{{ streak }} <small>days</small></strong><small>Keep a gentle, steady pace</small></div></article>
+        </section>
 
-    {% if stats.answer_count %}
-    <section class="progress-summary" aria-label="Practice statistics">
-        <div class="stat-card">
-            <strong>{{ stats.answer_count }}</strong>
-            <span>Answers scored</span>
-        </div>
-        <div class="stat-card">
-            <strong>{{ stats.average_score }}/100</strong>
-            <span>Average score</span>
-        </div>
-        <div class="stat-card">
-            <strong>{{ stats.best_score }}/100</strong>
-            <span>Best answer</span>
-        </div>
-    </section>
-    {% endif %}
+        <section class="dashboard-grid">
+            <article class="panel progress-panel">
+                <div class="panel-heading"><div><p class="eyebrow">PERFORMANCE</p><h2>Weekly progress</h2></div><span class="level-badge">{{ stats.answer_count or 0 }} answers</span></div>
+                <canvas id="progress-chart" aria-label="Weekly interview progress chart" data-labels='{{ weekly_labels|safe }}' data-values='{{ weekly_values|safe }}'></canvas>
+            </article>
+            <article class="panel challenge-card">
+                <p class="eyebrow">DAILY CHALLENGE</p><div class="challenge-orbit">⚡</div><h2>One question. One strong answer.</h2><p>Practice today’s interview prompt and earn XP.</p><a class="button" href="/challenge">Start challenge</a>
+            </article>
+        </section>
 
-    <section class="dashboard-card">
-        <div class="section-heading">
-            <div>
-                <p class="eyebrow">PERSONALIZED PRACTICE</p>
-                <h2>Start a mock interview</h2>
-            </div>
-            <span class="question-count">5 questions · about 10 minutes</span>
-        </div>
+        <section class="dashboard-grid lower">
+            <article class="panel quick-start">
+                <div class="panel-heading"><div><p class="eyebrow">QUICK START</p><h2>Start a mock interview</h2></div></div>
+                <form action="/interview" method="POST">
+                    <div class="setup-grid"><label>Role<select name="role">{% for role in roles %}<option>{{ role }}</option>{% endfor %}</select></label><label>Difficulty<select name="difficulty">{% for difficulty in difficulties %}<option>{{ difficulty }}</option>{% endfor %}</select></label></div>
+                    <button type="submit">Launch interview <span>→</span></button>
+                </form>
+            </article>
+            <article class="panel xp-card">
+                <div class="panel-heading"><div><p class="eyebrow">YOUR GROWTH</p><h2>Level {{ level }}</h2></div><strong>{{ xp }} XP</strong></div>
+                <div class="xp-track"><span style="--xp: {{ ((xp % 500) / 5)|round|int }}%"></span></div>
+                <p>{{ 500 - (xp % 500) }} XP to next level</p>
+            </article>
+        </section>
 
-        <form action="/interview" method="POST">
-            <div class="setup-fields">
-                <div>
-                    <label for="role">Job role</label>
-                    <select id="role" name="role" required>
-                        {% for role in roles %}
-                            <option value="{{ role }}">{{ role }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label for="difficulty">Difficulty level</label>
-                    <select id="difficulty" name="difficulty" required>
-                        {% for difficulty in difficulties %}
-                            <option value="{{ difficulty }}">{{ difficulty }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            <button type="submit">Start your practice</button>
-        </form>
-        <p class="form-hint">Questions are randomized and won’t repeat within a practice session.</p>
-    </section>
-
-    <section class="history">
-        <div class="section-heading">
-            <div>
-                <p class="eyebrow">YOUR PROGRESS</p>
-                <h2>Recent practice</h2>
-            </div>
-        </div>
-
-        {% if history %}
-            {% for item in history %}
-                <div class="history-item">
-                    <div class="history-title">
-                        <h3>{{ item.role }}</h3>
-                        <span class="level-badge">{{ item.difficulty }}</span>
-                    </div>
-                    <p>Question: {{ item.question }}</p>
-                    <p>Score: {{ item.score }}/100</p>
-                    <small>{{ item.created_at }}</small>
-                </div>
-            {% endfor %}
-        {% else %}
-            <p>No interviews completed yet. Start your first interview!</p>
-        {% endif %}
-    </section>
-</main>
-
+        <section class="dashboard-grid lower">
+            <article class="panel recent-panel">
+                <div class="panel-heading"><div><p class="eyebrow">RECENT ACTIVITY</p><h2>Interview sessions</h2></div><a href="/history">View all</a></div>
+                {% if history %}{% for item in history[:4] %}<div class="recent-row"><div class="recent-icon">◉</div><div><strong>{{ item.role }}</strong><small>{{ item.created_at }}</small></div><span class="level-badge">{{ item.difficulty }}</span><strong>{{ item.score }}/100</strong></div>{% endfor %}{% else %}<div class="empty-state"><h3>No sessions yet</h3><p>Your latest interview results will appear here.</p></div>{% endif %}
+            </article>
+            <article class="panel recommendations">
+                <div class="panel-heading"><div><p class="eyebrow">PERSONALIZED</p><h2>Recommended practice</h2></div></div>
+                {% if role_counts %}{% for item in role_counts %}<a href="/studio"><span>{{ loop.index }}</span><div><strong>{{ item.role }}</strong><small>Average {{ item.avg_score }}/100</small></div><b>→</b></a>{% endfor %}{% else %}<a href="/answer-studio"><span>1</span><div><strong>Answer structure</strong><small>Build a clear, evidence-based response</small></div><b>→</b></a><a href="/questions"><span>2</span><div><strong>Behavioral questions</strong><small>Practice the STAR framework</small></div><b>→</b></a>{% endif %}
+            </article>
+        </section>
+    </main>
 </body>
 </html>

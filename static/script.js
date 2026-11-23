@@ -1,4 +1,70 @@
 document.addEventListener("DOMContentLoaded", function () {
+    const savedTheme = localStorage.getItem("interviewmate-theme");
+    if (savedTheme === "light") document.body.classList.add("light-mode");
+    const themeSelect = document.querySelector('select[name="theme"]');
+    if (themeSelect) {
+        themeSelect.addEventListener("change", function () {
+            localStorage.setItem("interviewmate-theme", themeSelect.value);
+            document.body.classList.toggle("light-mode", themeSelect.value === "light");
+        });
+    }
+
+    const menuToggle = document.querySelector(".menu-toggle");
+    const sidebar = document.querySelector(".sidebar");
+    if (menuToggle && sidebar) {
+        menuToggle.addEventListener("click", () => sidebar.classList.toggle("open"));
+    }
+
+    const canvas = document.querySelector("#progress-chart");
+    if (canvas) {
+        const ctx = canvas.getContext("2d");
+        const labels = JSON.parse(canvas.dataset.labels || "[]");
+        const values = JSON.parse(canvas.dataset.values || "[]");
+        const width = canvas.clientWidth || 600;
+        const height = 190;
+        canvas.width = width * window.devicePixelRatio;
+        canvas.height = height * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        ctx.clearRect(0, 0, width, height);
+        ctx.font = "11px DM Sans, Arial";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#7d879e";
+        ctx.strokeStyle = "rgba(148,163,184,.09)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+            const y = 18 + i * 34;
+            ctx.beginPath(); ctx.moveTo(32, y); ctx.lineTo(width - 10, y); ctx.stroke();
+        }
+        if (!values.length) {
+            ctx.fillText("Complete an interview to start seeing progress", width / 2, height / 2);
+        } else {
+            const chartW = width - 42;
+            const chartH = 145;
+            const step = chartW / Math.max(values.length - 1, 1);
+            const points = values.map((value, i) => ({
+                x: 32 + i * step,
+                y: 160 - (Math.max(0, Math.min(100, value)) / 100) * chartH
+            }));
+            const gradient = ctx.createLinearGradient(0, 20, 0, height);
+            gradient.addColorStop(0, "rgba(124,131,255,.28)");
+            gradient.addColorStop(1, "rgba(124,131,255,0)");
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, 160);
+            points.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.lineTo(points[points.length - 1].x, 160);
+            ctx.closePath(); ctx.fillStyle = gradient; ctx.fill();
+            ctx.beginPath();
+            points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+            ctx.strokeStyle = "#858fff"; ctx.lineWidth = 3; ctx.stroke();
+            points.forEach((p, i) => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = "#dfe3ff"; ctx.fill();
+                ctx.fillStyle = "#7d879e";
+                ctx.fillText(labels[i] || "", p.x, 180);
+            });
+        }
+    }
+
     const answerField = document.querySelector("#answer");
     const wordCount = document.querySelector("#word-count");
     if (answerField && wordCount) {
