@@ -58,6 +58,7 @@
                 <div class="panel-heading"><div><p class="eyebrow">QUICK START</p><h2>Start a mock interview</h2></div></div>
                 <form action="/interview" method="POST">
                     <div class="setup-grid"><label>Role<select name="role">{% for role in roles %}<option>{{ role }}</option>{% endfor %}</select></label><label>Difficulty<select name="difficulty">{% for difficulty in difficulties %}<option>{{ difficulty }}</option>{% endfor %}</select></label></div>
+                    <label class="timer-setting">Answer timer<select name="answer_time"><option value="60">1 minute</option><option value="90">1.5 minutes</option><option value="120" selected>2 minutes</option><option value="180">3 minutes</option><option value="300">5 minutes</option></select></label>
                     <button type="submit">Launch interview <span>→</span></button>
                 </form>
             </article>

@@ -71,6 +71,7 @@ document.addEventListener("DOMContentLoaded", function () {
         function updateWordCount() {
             const words = answerField.value.trim().match(/\S+/g) || [];
             wordCount.textContent = `${words.length} ${words.length === 1 ? "word" : "words"}`;
+            localStorage.setItem("interviewmate-answer-draft", answerField.value);
 
             const text = answerField.value.toLowerCase();
             const detailCheck = document.querySelector("#check-detail");
@@ -91,7 +92,58 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         answerField.addEventListener("input", updateWordCount);
+        const savedDraft = localStorage.getItem("interviewmate-answer-draft");
+        if (savedDraft && !answerField.value) {
+            answerField.value = savedDraft;
+        }
         updateWordCount();
+    }
+
+    const timer = document.querySelector("#answer-timer");
+    if (timer && answerField) {
+        let remaining = Number(timer.dataset.seconds || 120);
+        const timerValue = document.querySelector("#timer-value");
+        const timerStatus = document.querySelector("#timer-status");
+        const timerForm = answerField.closest("form");
+        let submitted = false;
+
+        const interval = window.setInterval(function () {
+            remaining -= 1;
+            const minutes = Math.floor(Math.max(0, remaining) / 60);
+            const seconds = Math.max(0, remaining) % 60;
+            if (timerValue) {
+                timerValue.textContent = `${minutes}:${String(seconds).padStart(2, "0")}`;
+            }
+            timer.classList.toggle("timer-warning", remaining <= 30 && remaining > 0);
+
+            if (remaining <= 30 && remaining > 0 && timerStatus) {
+                timerStatus.textContent = "Wrap up and submit your answer";
+            }
+
+            if (remaining <= 0 && !submitted) {
+                submitted = true;
+                window.clearInterval(interval);
+                timer.classList.add("timer-expired");
+                if (timerStatus) {
+                    timerStatus.textContent = "Time is up — submitting your answer";
+                }
+                localStorage.removeItem("interviewmate-answer-draft");
+                answerField.removeAttribute("required");
+                if (timerForm) timerForm.submit();
+            }
+        }, 1000);
+    }
+
+    const roadmapChecks = document.querySelectorAll(".task-row input");
+    if (roadmapChecks.length) {
+        const savedTasks = JSON.parse(localStorage.getItem("interviewmate-roadmap") || "[]");
+        roadmapChecks.forEach(function (checkbox, index) {
+            checkbox.checked = Boolean(savedTasks[index]);
+            checkbox.addEventListener("change", function () {
+                const completed = Array.from(roadmapChecks).map(item => item.checked);
+                localStorage.setItem("interviewmate-roadmap", JSON.stringify(completed));
+            });
+        });
     }
 
     const speakButton = document.querySelector("#speak-question");

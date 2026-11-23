@@ -14,6 +14,8 @@ import random
 import smtplib
 import urllib.error
 import urllib.request
+import csv
+import io
 from email.mime.text import MIMEText
 
 load_dotenv()
@@ -649,6 +651,7 @@ def interview():
     if request.method == "POST":
         role = request.form.get("role")
         difficulty = request.form.get("difficulty")
+        answer_time = request.form.get("answer_time", "120")
 
         if role not in QUESTIONS:
             flash("Please select a valid job role.")
@@ -657,6 +660,13 @@ def interview():
         if difficulty not in DIFFICULTIES:
             flash("Please select a valid difficulty level.")
             return redirect(url_for("dashboard"))
+
+        try:
+            answer_time = int(answer_time)
+        except (TypeError, ValueError):
+            answer_time = 120
+        if answer_time not in (60, 90, 120, 180, 300):
+            answer_time = 120
 
         connection = get_db()
         completed_questions = {
@@ -691,6 +701,8 @@ def interview():
         session["interview_questions"] = interview_questions
         session["question_index"] = 0
         session["answers"] = []
+        session["answer_time"] = answer_time
+        session["started_at"] = datetime.now().isoformat()
 
         return redirect(url_for("interview"))
 
@@ -714,6 +726,7 @@ def interview():
         number=index + 1,
         total=len(questions),
         progress=round(index / len(questions) * 100),
+        answer_time=session.get("answer_time", 120),
         voice_enabled=bool(os.environ.get("OPENAI_API_KEY"))
     )
 
@@ -882,6 +895,33 @@ def history_page():
                            history=history)
 
 
+@app.route("/history/export")
+@login_required
+def export_history():
+    connection = get_db()
+    history = connection.execute(
+        """SELECT role, difficulty, question, answer, score, feedback, created_at
+           FROM interviews WHERE user_id = ? ORDER BY id DESC""",
+        (session["user_id"],)
+    ).fetchall()
+    connection.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Role", "Difficulty", "Question", "Answer", "Score", "Feedback", "Date"])
+    for item in history:
+        writer.writerow([
+            item["role"], item["difficulty"], item["question"], item["answer"],
+            item["score"], item["feedback"], item["created_at"],
+        ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=interviewmate-history.csv"},
+    )
+
+
 @app.route("/studio")
 @login_required
 def studio():
@@ -1021,13 +1061,38 @@ def roadmap():
                            tasks=tasks)
 
 
-@app.route("/challenge")
+@app.route("/challenge", methods=["GET", "POST"])
 @login_required
 def challenge():
     question = QUESTION_LIBRARY[(datetime.now().timetuple().tm_yday - 1) % len(QUESTION_LIBRARY)]
+    result = None
+    if request.method == "POST":
+        answer = request.form.get("answer", "").strip()
+        if len(answer.split()) < 12:
+            flash("Write at least a few detailed sentences before submitting.")
+        else:
+            score, feedback, dimensions, strengths, weak_dimensions, suggestions = evaluate_answer(
+                answer, "Web Developer"
+            )
+            connection = get_db()
+            connection.execute(
+                """INSERT INTO interviews
+                   (user_id, role, difficulty, question, answer, score, feedback)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (session["user_id"], "Daily Challenge", question["difficulty"],
+                 question["question"], answer, score, feedback)
+            )
+            connection.commit()
+            connection.close()
+            result = {
+                "score": score,
+                "feedback": feedback,
+                "strengths": strengths,
+                "suggestions": suggestions,
+            }
     return render_template("workspace.html", name=session["name"], active="challenge",
                            title="Daily Interview Challenge", subtitle="Today's focused practice",
-                           challenge=question)
+                           challenge=question, challenge_result=result)
 
 
 @app.route("/settings", methods=["GET", "POST"])
