@@ -104,6 +104,32 @@ def synthesize_question_audio(question):
         return response.read()
 
 
+@lru_cache(maxsize=60)
+def synthesize_copilot_audio(reply):
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured.")
+
+    payload = json.dumps({
+        "model": "gpt-4o-mini-tts",
+        "voice": "marin",
+        "input": reply[:4000],
+        "instructions": "Speak clearly and warmly as an interview preparation coach.",
+        "response_format": "mp3"
+    }).encode("utf-8")
+    api_request = urllib.request.Request(
+        "https://api.openai.com/v1/audio/speech",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+    with urllib.request.urlopen(api_request, timeout=30) as response:
+        return response.read()
+
+
 def ask_copilot(message):
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -744,6 +770,30 @@ def copilot_api():
     except (ValueError, RuntimeError) as error:
         app.logger.error("Could not generate copilot response: %s", error)
         return jsonify(error="The AI could not produce a response. Try again."), 502
+
+
+@app.route("/api/copilot-audio", methods=["POST"])
+@login_required
+def copilot_audio():
+    if not request.is_json:
+        return jsonify(error="Send a JSON request with a reply."), 400
+    reply = str(request.json.get("reply", "")).strip()
+    if not reply or len(reply) > 4000:
+        return jsonify(error="The reply must contain between 1 and 4,000 characters."), 400
+    if not os.environ.get("OPENAI_API_KEY"):
+        return jsonify(error="Voice is not configured. Add OPENAI_API_KEY to the server environment."), 503
+
+    try:
+        return Response(synthesize_copilot_audio(reply), mimetype="audio/mpeg")
+    except urllib.error.HTTPError as error:
+        app.logger.error("OpenAI copilot voice returned HTTP %s.", error.code)
+        return jsonify(error="The AI voice service rejected the request."), 502
+    except (urllib.error.URLError, TimeoutError):
+        app.logger.error("Could not reach OpenAI copilot voice service.")
+        return jsonify(error="The AI voice service is temporarily unavailable."), 502
+    except (ValueError, RuntimeError) as error:
+        app.logger.error("Could not generate copilot voice: %s", error)
+        return jsonify(error="Could not generate spoken feedback."), 502
 
 
 @app.route("/interview", methods=["GET", "POST"])

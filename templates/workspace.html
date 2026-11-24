@@ -58,15 +58,26 @@
             {% elif active == 'copilot' %}
             <section class="panel copilot-panel">
                 <div class="panel-heading"><div><p class="eyebrow">SAFE AI ASSISTANT</p><h2>What would you like to practice?</h2></div><span class="level-badge">Powered by AI</span></div>
-                <p class="copilot-intro">Ask for feedback, preparation ideas, or help choosing the right InterviewMate tool. The copilot cannot access your password or change account data.</p>
+                <p class="copilot-intro">Ask for feedback, preparation ideas, or help choosing the right InterviewMate tool. You can type or use your microphone. The copilot cannot access your password or change account data.</p>
+                <div class="copilot-shortcuts" aria-label="Copilot shortcuts">
+                    <button type="button" class="secondary-button copilot-shortcut" data-prompt="Create a focused Python interview preparation plan for me.">Python plan</button>
+                    <button type="button" class="secondary-button copilot-shortcut" data-prompt="Help me improve the structure of an interview answer.">Improve an answer</button>
+                    <button type="button" class="secondary-button copilot-shortcut" data-prompt="Which InterviewMate tool should I use to compare my resume with a job description?">Choose a tool</button>
+                    <a class="secondary-button" href="/studio">Start interview</a>
+                </div>
                 <div id="copilot-messages" class="copilot-messages" aria-live="polite">
                     <div class="copilot-message assistant">Hi! I can help you prepare for an interview. Try “Give me a Python interview plan” or “Which tool should I use to compare my resume with a job?”</div>
                 </div>
                 <form id="copilot-form" class="copilot-form">
                     <label for="copilot-input">Message<textarea id="copilot-input" rows="3" maxlength="2000" placeholder="Ask the AI copilot..." required></textarea></label>
-                    <button type="submit">Ask Copilot <span aria-hidden="true">→</span></button>
+                    <div class="copilot-controls">
+                        <button type="button" id="copilot-mic" class="secondary-button" aria-label="Speak to Copilot">Use microphone</button>
+                        <button type="submit">Ask Copilot <span aria-hidden="true">→</span></button>
+                        <button type="button" id="copilot-speak" class="secondary-button" disabled>Read last reply</button>
+                    </div>
                     <p id="copilot-status" class="copilot-status" role="status"></p>
                 </form>
+                <audio id="copilot-audio" hidden></audio>
             </section>
         {% elif active == 'resume' %}
         <div class="workspace-grid">
