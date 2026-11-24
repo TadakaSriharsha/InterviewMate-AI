@@ -104,6 +104,49 @@ def synthesize_question_audio(question):
         return response.read()
 
 
+def ask_copilot(message):
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured.")
+
+    payload = json.dumps({
+        "model": os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+        "temperature": 0.4,
+        "max_tokens": 500,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are InterviewMate Copilot, a concise interview-preparation "
+                    "coach. Help users with mock interviews, resumes, job descriptions, "
+                    "Python coding, answer structure, and career roadmaps. You can "
+                    "suggest these safe app destinations when useful: /studio, "
+                    "/resume-lab, /job-analyzer, /coding, /answer-studio, /questions, "
+                    "/roadmap, /challenge, and /history. Never claim to have changed "
+                    "account data or performed an action you cannot perform. Do not "
+                    "request passwords, API keys, or other secrets."
+                )
+            },
+            {"role": "user", "content": message}
+        ]
+    }).encode("utf-8")
+    api_request = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+    with urllib.request.urlopen(api_request, timeout=30) as response:
+        response_data = json.loads(response.read().decode("utf-8"))
+    choices = response_data.get("choices", [])
+    if not choices or not choices[0].get("message", {}).get("content"):
+        raise RuntimeError("The AI returned an empty response.")
+    return choices[0]["message"]["content"].strip()
+
+
 QUESTIONS = {
     "Python Developer": {
         "Beginner": [
@@ -660,6 +703,47 @@ def dashboard():
         role_counts=role_counts,
         preferences=preferences
     )
+
+
+@app.route("/copilot")
+@login_required
+def copilot():
+    return render_template(
+        "workspace.html",
+        name=session["name"],
+        active="copilot",
+        title="AI Copilot",
+        subtitle="Ask for interview guidance or a safe shortcut to any workspace tool."
+    )
+
+
+@app.route("/api/copilot", methods=["POST"])
+@login_required
+def copilot_api():
+    if not request.is_json:
+        return jsonify(error="Send a JSON request with a message."), 400
+
+    message = str(request.json.get("message", "")).strip()
+    if not message:
+        return jsonify(error="Enter a message for the copilot."), 400
+    if len(message) > 2000:
+        return jsonify(error="Keep your message under 2,000 characters."), 400
+    if not os.environ.get("OPENAI_API_KEY"):
+        return jsonify(
+            error="AI Copilot is not configured. Add OPENAI_API_KEY to the server environment."
+        ), 503
+
+    try:
+        return jsonify(reply=ask_copilot(message))
+    except urllib.error.HTTPError as error:
+        app.logger.error("OpenAI copilot returned HTTP %s.", error.code)
+        return jsonify(error="The AI service rejected the request. Try again shortly."), 502
+    except (urllib.error.URLError, TimeoutError):
+        app.logger.error("Could not reach OpenAI copilot service.")
+        return jsonify(error="The AI service is temporarily unavailable."), 502
+    except (ValueError, RuntimeError) as error:
+        app.logger.error("Could not generate copilot response: %s", error)
+        return jsonify(error="The AI could not produce a response. Try again."), 502
 
 
 @app.route("/interview", methods=["GET", "POST"])

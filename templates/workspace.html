@@ -21,6 +21,7 @@
             <a class="{{ 'active' if active == 'roadmap' else '' }}" href="/roadmap"><span>↗</span> Career Roadmap</a>
             <a class="{{ 'active' if active == 'challenge' else '' }}" href="/challenge"><span>⚡</span> Daily Challenge</a>
             <a class="{{ 'active' if active == 'history' else '' }}" href="/history"><span>◷</span> Interview History</a>
+            <a class="{{ 'active' if active == 'copilot' else '' }}" href="/copilot"><span>✦</span> AI Copilot</a>
         </nav>
         <div class="sidebar-footer">
             <a class="{{ 'active' if active == 'settings' else '' }}" href="/settings">⚙ Settings</a>
@@ -54,6 +55,19 @@
             </div>
             <button type="submit">Start interview</button>
         </form>
+            {% elif active == 'copilot' %}
+            <section class="panel copilot-panel">
+                <div class="panel-heading"><div><p class="eyebrow">SAFE AI ASSISTANT</p><h2>What would you like to practice?</h2></div><span class="level-badge">Powered by AI</span></div>
+                <p class="copilot-intro">Ask for feedback, preparation ideas, or help choosing the right InterviewMate tool. The copilot cannot access your password or change account data.</p>
+                <div id="copilot-messages" class="copilot-messages" aria-live="polite">
+                    <div class="copilot-message assistant">Hi! I can help you prepare for an interview. Try “Give me a Python interview plan” or “Which tool should I use to compare my resume with a job?”</div>
+                </div>
+                <form id="copilot-form" class="copilot-form">
+                    <label for="copilot-input">Message<textarea id="copilot-input" rows="3" maxlength="2000" placeholder="Ask the AI copilot..." required></textarea></label>
+                    <button type="submit">Ask Copilot <span aria-hidden="true">→</span></button>
+                    <p id="copilot-status" class="copilot-status" role="status"></p>
+                </form>
+            </section>
         {% elif active == 'resume' %}
         <div class="workspace-grid">
             <form method="POST" class="panel"><label>Paste resume text<textarea name="resume_text" rows="14" placeholder="Paste resume content here..."></textarea></label><button type="submit">Analyze resume</button></form>
