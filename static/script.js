@@ -1,4 +1,23 @@
 document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".save-question").forEach(function (button) {
+        button.addEventListener("click", async function () {
+            const form = new URLSearchParams({
+                question: button.dataset.question,
+                category: button.dataset.category,
+                difficulty: button.dataset.difficulty
+            });
+            const response = await fetch("/questions/save", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: form
+            });
+            if (response.ok) {
+                const data = await response.json();
+                button.classList.toggle("saved", data.saved);
+                button.textContent = data.saved ? "Saved" : "Save";
+            }
+        });
+    });
     const savedTheme = localStorage.getItem("interviewmate-theme");
     if (savedTheme === "light") document.body.classList.add("light-mode");
     const themeSelect = document.querySelector('select[name="theme"]');
@@ -155,6 +174,112 @@ document.addEventListener("DOMContentLoaded", function () {
     const speakButton = document.querySelector("#speak-question");
     const voiceStatus = document.querySelector("#voice-status");
     const audioPlayer = document.querySelector("#question-audio");
+    const copilotForm = document.querySelector("#copilot-form");
+    const copilotInput = document.querySelector("#copilot-input");
+    const copilotMessages = document.querySelector("#copilot-messages");
+    const copilotStatus = document.querySelector("#copilot-status");
+    const copilotMic = document.querySelector("#copilot-mic");
+    const copilotSpeak = document.querySelector("#copilot-speak");
+    const copilotAudio = document.querySelector("#copilot-audio");
+    let lastCopilotReply = "";
+    if (copilotForm && copilotInput && copilotMessages && copilotStatus) {
+        document.querySelectorAll(".copilot-shortcut").forEach(function (shortcut) {
+            shortcut.addEventListener("click", function () {
+                copilotInput.value = shortcut.dataset.prompt || "";
+                copilotInput.focus();
+            });
+        });
+
+        if (copilotMic) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                copilotMic.disabled = true;
+                copilotMic.textContent = "Microphone unavailable";
+            } else {
+                const recognition = new SpeechRecognition();
+                recognition.lang = "en-US";
+                recognition.interimResults = false;
+                recognition.onstart = () => {
+                    copilotMic.disabled = true;
+                    copilotStatus.textContent = "Listening...";
+                };
+                recognition.onresult = (event) => {
+                    copilotInput.value = event.results[0][0].transcript;
+                    copilotStatus.textContent = "Voice captured. Press Ask Copilot.";
+                    copilotInput.focus();
+                };
+                recognition.onerror = () => {
+                    copilotStatus.textContent = "Microphone input was not captured.";
+                };
+                recognition.onend = () => {
+                    copilotMic.disabled = false;
+                };
+                copilotMic.addEventListener("click", () => recognition.start());
+            }
+        }
+
+        if (copilotSpeak && copilotAudio) {
+            copilotSpeak.addEventListener("click", async function () {
+                if (!lastCopilotReply) return;
+                copilotSpeak.disabled = true;
+                copilotStatus.textContent = "Preparing spoken feedback...";
+                try {
+                    const response = await fetch("/api/copilot-audio", {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({reply: lastCopilotReply})
+                    });
+                    if (!response.ok) {
+                        const data = await response.json();
+                        throw new Error(data.error || "Could not generate audio.");
+                    }
+                    if (copilotAudio.src) URL.revokeObjectURL(copilotAudio.src);
+                    copilotAudio.src = URL.createObjectURL(await response.blob());
+                    await copilotAudio.play();
+                    copilotStatus.textContent = "Reading the last reply...";
+                } catch (error) {
+                    copilotStatus.textContent = error.message || "Could not generate audio.";
+                } finally {
+                    copilotSpeak.disabled = false;
+                }
+            });
+        }
+
+        copilotForm.addEventListener("submit", async function (event) {
+            event.preventDefault();
+            const message = copilotInput.value.trim();
+            if (!message) return;
+            const userMessage = document.createElement("div");
+            userMessage.className = "copilot-message user";
+            userMessage.textContent = message;
+            copilotMessages.appendChild(userMessage);
+            copilotInput.value = "";
+            copilotStatus.textContent = "Copilot is thinking...";
+            copilotForm.querySelector("button").disabled = true;
+            try {
+                const response = await fetch("/api/copilot", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({message})
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || "Could not contact Copilot.");
+                const assistantMessage = document.createElement("div");
+                assistantMessage.className = "copilot-message assistant";
+                assistantMessage.textContent = data.reply;
+                copilotMessages.appendChild(assistantMessage);
+                lastCopilotReply = data.reply;
+                if (copilotSpeak) copilotSpeak.disabled = false;
+                copilotMessages.scrollTop = copilotMessages.scrollHeight;
+                copilotStatus.textContent = "";
+            } catch (error) {
+                copilotStatus.textContent = error.message || "Could not contact Copilot.";
+            } finally {
+                copilotForm.querySelector("button").disabled = false;
+            }
+        });
+    }
+
     if (!speakButton || !voiceStatus || !audioPlayer) {
         return;
     }

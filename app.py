@@ -104,6 +104,75 @@ def synthesize_question_audio(question):
         return response.read()
 
 
+@lru_cache(maxsize=60)
+def synthesize_copilot_audio(reply):
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured.")
+
+    payload = json.dumps({
+        "model": "gpt-4o-mini-tts",
+        "voice": "marin",
+        "input": reply[:4000],
+        "instructions": "Speak clearly and warmly as an interview preparation coach.",
+        "response_format": "mp3"
+    }).encode("utf-8")
+    api_request = urllib.request.Request(
+        "https://api.openai.com/v1/audio/speech",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+    with urllib.request.urlopen(api_request, timeout=30) as response:
+        return response.read()
+
+
+def ask_copilot(message):
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured.")
+
+    payload = json.dumps({
+        "model": os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+        "temperature": 0.4,
+        "max_tokens": 500,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are InterviewMate Copilot, a concise interview-preparation "
+                    "coach. Help users with mock interviews, resumes, job descriptions, "
+                    "Python coding, answer structure, and career roadmaps. You can "
+                    "suggest these safe app destinations when useful: /studio, "
+                    "/resume-lab, /job-analyzer, /coding, /answer-studio, /questions, "
+                    "/roadmap, /challenge, and /history. Never claim to have changed "
+                    "account data or performed an action you cannot perform. Do not "
+                    "request passwords, API keys, or other secrets."
+                )
+            },
+            {"role": "user", "content": message}
+        ]
+    }).encode("utf-8")
+    api_request = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+    with urllib.request.urlopen(api_request, timeout=30) as response:
+        response_data = json.loads(response.read().decode("utf-8"))
+    choices = response_data.get("choices", [])
+    if not choices or not choices[0].get("message", {}).get("content"):
+        raise RuntimeError("The AI returned an empty response.")
+    return choices[0]["message"]["content"].strip()
+
+
 QUESTIONS = {
     "Python Developer": {
         "Beginner": [
@@ -616,6 +685,17 @@ def dashboard():
         (session["user_id"],)
     ).fetchall()
 
+    practice_days = connection.execute(
+        """SELECT DISTINCT substr(created_at, 1, 10) AS day
+           FROM interviews WHERE user_id = ?
+           ORDER BY day DESC""",
+        (session["user_id"],)
+    ).fetchall()
+    preferences = connection.execute(
+        "SELECT * FROM user_preferences WHERE user_id = ?",
+        (session["user_id"],)
+    ).fetchone()
+
     connection.close()
 
     answer_count = stats["answer_count"] or 0
@@ -623,7 +703,12 @@ def dashboard():
     practice_hours = round(answer_count * 3 / 60, 1)
     interview_count = max(1, (answer_count + 4) // 5) if answer_count else 0
     xp = answer_count * 20 + int((average_score or 0) * 2)
-    streak = min(answer_count, 7)
+    streak = 0
+    streak_cursor = datetime.now().date()
+    active_days = {row["day"] for row in practice_days}
+    while streak_cursor.strftime("%Y-%m-%d") in active_days:
+        streak += 1
+        streak_cursor -= timedelta(days=1)
     weekly_labels = [row["day"][-5:] for row in weekly]
     weekly_values = [row["score"] or 0 for row in weekly]
 
@@ -641,8 +726,74 @@ def dashboard():
         level=(xp // 500) + 1,
         weekly_labels=json.dumps(weekly_labels),
         weekly_values=json.dumps(weekly_values),
-        role_counts=role_counts
+        role_counts=role_counts,
+        preferences=preferences
     )
+
+
+@app.route("/copilot")
+@login_required
+def copilot():
+    return render_template(
+        "workspace.html",
+        name=session["name"],
+        active="copilot",
+        title="AI Copilot",
+        subtitle="Ask for interview guidance or a safe shortcut to any workspace tool."
+    )
+
+
+@app.route("/api/copilot", methods=["POST"])
+@login_required
+def copilot_api():
+    if not request.is_json:
+        return jsonify(error="Send a JSON request with a message."), 400
+
+    message = str(request.json.get("message", "")).strip()
+    if not message:
+        return jsonify(error="Enter a message for the copilot."), 400
+    if len(message) > 2000:
+        return jsonify(error="Keep your message under 2,000 characters."), 400
+    if not os.environ.get("OPENAI_API_KEY"):
+        return jsonify(
+            error="AI Copilot is not configured. Add OPENAI_API_KEY to the server environment."
+        ), 503
+
+    try:
+        return jsonify(reply=ask_copilot(message))
+    except urllib.error.HTTPError as error:
+        app.logger.error("OpenAI copilot returned HTTP %s.", error.code)
+        return jsonify(error="The AI service rejected the request. Try again shortly."), 502
+    except (urllib.error.URLError, TimeoutError):
+        app.logger.error("Could not reach OpenAI copilot service.")
+        return jsonify(error="The AI service is temporarily unavailable."), 502
+    except (ValueError, RuntimeError) as error:
+        app.logger.error("Could not generate copilot response: %s", error)
+        return jsonify(error="The AI could not produce a response. Try again."), 502
+
+
+@app.route("/api/copilot-audio", methods=["POST"])
+@login_required
+def copilot_audio():
+    if not request.is_json:
+        return jsonify(error="Send a JSON request with a reply."), 400
+    reply = str(request.json.get("reply", "")).strip()
+    if not reply or len(reply) > 4000:
+        return jsonify(error="The reply must contain between 1 and 4,000 characters."), 400
+    if not os.environ.get("OPENAI_API_KEY"):
+        return jsonify(error="Voice is not configured. Add OPENAI_API_KEY to the server environment."), 503
+
+    try:
+        return Response(synthesize_copilot_audio(reply), mimetype="audio/mpeg")
+    except urllib.error.HTTPError as error:
+        app.logger.error("OpenAI copilot voice returned HTTP %s.", error.code)
+        return jsonify(error="The AI voice service rejected the request."), 502
+    except (urllib.error.URLError, TimeoutError):
+        app.logger.error("Could not reach OpenAI copilot voice service.")
+        return jsonify(error="The AI voice service is temporarily unavailable."), 502
+    except (ValueError, RuntimeError) as error:
+        app.logger.error("Could not generate copilot voice: %s", error)
+        return jsonify(error="Could not generate spoken feedback."), 502
 
 
 @app.route("/interview", methods=["GET", "POST"])
@@ -995,14 +1146,57 @@ def job_analyzer():
 @login_required
 def coding_arena():
     problems = [
-        {"title": "Two Sum", "difficulty": "Easy", "topic": "Arrays", "language": "Python"},
-        {"title": "Valid Parentheses", "difficulty": "Easy", "topic": "Stacks", "language": "Java"},
-        {"title": "Longest Unique Substring", "difficulty": "Medium", "topic": "Strings", "language": "JavaScript"},
-        {"title": "Nth Highest Salary", "difficulty": "Medium", "topic": "SQL", "language": "SQL"},
+        {"title": "Two Sum", "difficulty": "Easy", "topic": "Arrays", "language": "Python",
+         "prompt": "Given nums and target, return indices of two values that add to target.",
+         "starter": "def two_sum(nums, target):\n    # Write your solution here\n    return []",
+         "solution_hint": "Use a dictionary to remember each value and its index."},
+        {"title": "Valid Parentheses", "difficulty": "Easy", "topic": "Stacks", "language": "Python",
+         "prompt": "Return True when every opening bracket is closed by the matching bracket.",
+         "starter": "def is_valid_parentheses(text):\n    # Write your solution here\n    return False",
+         "solution_hint": "Push opening brackets onto a stack and validate each closing bracket."},
+        {"title": "Longest Unique Substring", "difficulty": "Medium", "topic": "Strings", "language": "Python",
+         "prompt": "Return the length of the longest substring without repeating characters.",
+         "starter": "def length_of_longest_unique(text):\n    # Write your solution here\n    return 0",
+         "solution_hint": "Maintain a sliding window and the last position of each character."},
+        {"title": "Fibonacci Number", "difficulty": "Medium", "topic": "Dynamic Programming", "language": "Python",
+         "prompt": "Return the nth Fibonacci number using an efficient iterative algorithm.",
+         "starter": "def fibonacci(n):\n    # Write your solution here\n    return 0",
+         "solution_hint": "Keep only the previous two values while iterating from zero to n."},
     ]
+    result = None
+    selected = problems[0]
+    if request.method == "POST":
+        title = request.form.get("problem", "")
+        selected = next((item for item in problems if item["title"] == title), selected)
+        if request.form.get("select_problem"):
+            return render_template("workspace.html", name=session["name"], active="coding",
+                                   title="Coding Interview Arena",
+                                   subtitle="Practice problems without executing code on the app server",
+                                   problems=problems, selected=selected, coding_result=None)
+        code = request.form.get("code", "").strip()
+        explanation = request.form.get("explanation", "").strip()
+        if len(code) < 20:
+            flash("Add more of your Python solution before submitting.")
+        elif "return" not in code:
+            flash("Your solution should include a return value.")
+        else:
+            score = 60
+            if len(code) >= 120:
+                score += 15
+            if "for " in code or "while " in code:
+                score += 10
+            if "dict" in code or "{" in code or "set(" in code:
+                score += 10
+            if len(explanation.split()) >= 15:
+                score += 5
+            result = {
+                "score": min(score, 100),
+                "feedback": "Good implementation attempt. Verify edge cases and explain your time/space complexity.",
+                "hint": selected["solution_hint"],
+            }
     return render_template("workspace.html", name=session["name"], active="coding",
                            title="Coding Interview Arena", subtitle="Practice problems without executing code on the app server",
-                           problems=problems)
+                           problems=problems, selected=selected, coding_result=result)
 
 
 @app.route("/questions")
@@ -1019,9 +1213,44 @@ def question_library():
     if difficulty:
         items = [i for i in items if i["difficulty"] == difficulty]
     categories = sorted(set(i["category"] for i in QUESTION_LIBRARY))
+    connection = get_db()
+    saved = {
+        row["question"] for row in connection.execute(
+            "SELECT question FROM saved_questions WHERE user_id = ?",
+            (session["user_id"],)
+        ).fetchall()
+    }
+    connection.close()
     return render_template("workspace.html", name=session["name"], active="questions",
                            title="Question Library", subtitle="Search, filter, and practice interview questions",
-                           questions=items, categories=categories)
+                           questions=items, categories=categories, saved_questions=saved)
+
+
+@app.route("/questions/save", methods=["POST"])
+@login_required
+def save_question():
+    question = request.form.get("question", "").strip()
+    category = request.form.get("category", "").strip()
+    difficulty = request.form.get("difficulty", "").strip()
+    if not question:
+        return jsonify(error="Question is required."), 400
+    connection = get_db()
+    existing = connection.execute(
+        "SELECT id FROM saved_questions WHERE user_id = ? AND question = ?",
+        (session["user_id"], question)
+    ).fetchone()
+    if existing:
+        connection.execute("DELETE FROM saved_questions WHERE id = ?", (existing["id"],))
+        saved = False
+    else:
+        connection.execute(
+            "INSERT INTO saved_questions (user_id, question, category, difficulty) VALUES (?, ?, ?, ?)",
+            (session["user_id"], question, category, difficulty)
+        )
+        saved = True
+    connection.commit()
+    connection.close()
+    return jsonify(saved=saved)
 
 
 @app.route("/answer-studio", methods=["GET", "POST"])
