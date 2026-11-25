@@ -44,7 +44,7 @@ h1,h2,h3{font-family:"Manrope","DM Sans",sans-serif}
 
 .skip-link{position:absolute;z-index:100;top:8px;left:8px;padding:10px 14px;border-radius:8px;background:#fff;color:#111;transform:translateY(-150%)}
 .skip-link:focus{transform:translateY(0)}
-.lp-header{position:sticky;z-index:30;top:0;display:grid!important;grid-template-columns:1fr auto 1fr;gap:24px;padding:14px max(5%,calc((100vw - 1200px)/2))!important;background:rgba(8,13,28,.84);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
+.lp-header{position:sticky;z-index:30;top:0;display:grid!important;grid-template-columns:auto 1fr auto;gap:24px;padding:14px max(5%,calc((100vw - 1200px)/2))!important;background:rgba(8,13,28,.84);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
 .lp-logo{display:flex;align-items:center;gap:10px;font-family:"Manrope",sans-serif;font-size:15px;font-weight:800;white-space:nowrap}
 .lp-logo b{color:#9298ff}
 .lp-header .brand-mark{flex:none}
