@@ -1142,7 +1142,7 @@ def job_analyzer():
                            analysis=analysis)
 
 
-@app.route("/coding")
+@app.route("/coding", methods=["GET", "POST"])
 @login_required
 def coding_arena():
     problems = [
@@ -1293,35 +1293,80 @@ def roadmap():
 @app.route("/challenge", methods=["GET", "POST"])
 @login_required
 def challenge():
-    question = QUESTION_LIBRARY[(datetime.now().timetuple().tm_yday - 1) % len(QUESTION_LIBRARY)]
-    result = None
+    now = datetime.now()
+    today = now.date().isoformat()
+    question = QUESTION_LIBRARY[
+        (now.timetuple().tm_yday - 1) % len(QUESTION_LIBRARY)
+    ]
+    connection = get_db()
+
     if request.method == "POST":
         answer = request.form.get("answer", "").strip()
         if len(answer.split()) < 12:
             flash("Write at least a few detailed sentences before submitting.")
         else:
-            score, feedback, dimensions, strengths, weak_dimensions, suggestions = evaluate_answer(
+            score, feedback, _, _, _, _ = evaluate_answer(
                 answer, "Web Developer"
             )
-            connection = get_db()
-            connection.execute(
-                """INSERT INTO interviews
-                   (user_id, role, difficulty, question, answer, score, feedback)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (session["user_id"], "Daily Challenge", question["difficulty"],
-                 question["question"], answer, score, feedback)
-            )
-            connection.commit()
-            connection.close()
-            result = {
-                "score": score,
-                "feedback": feedback,
-                "strengths": strengths,
-                "suggestions": suggestions,
-            }
-    return render_template("workspace.html", name=session["name"], active="challenge",
-                           title="Daily Interview Challenge", subtitle="Today's focused practice",
-                           challenge=question, challenge_result=result)
+            connection.execute("BEGIN IMMEDIATE")
+            completed = connection.execute(
+                """SELECT interview_id FROM daily_challenges
+                   WHERE user_id = ? AND challenge_date = ?""",
+                (session["user_id"], today)
+            ).fetchone()
+            if completed:
+                connection.rollback()
+                flash("You have already completed today's challenge.")
+            else:
+                cursor = connection.execute(
+                    """INSERT INTO interviews
+                       (user_id, role, difficulty, question, answer, score, feedback)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (session["user_id"], "Daily Challenge", question["difficulty"],
+                     question["question"], answer, score, feedback)
+                )
+                connection.execute(
+                    """INSERT INTO daily_challenges (user_id, challenge_date, interview_id)
+                       VALUES (?, ?, ?)""",
+                    (session["user_id"], today, cursor.lastrowid)
+                )
+                connection.commit()
+
+    completed = connection.execute(
+        """SELECT i.question, i.answer, i.score, i.feedback
+           FROM daily_challenges d
+           JOIN interviews i ON i.id = d.interview_id
+           WHERE d.user_id = ? AND d.challenge_date = ?""",
+        (session["user_id"], today)
+    ).fetchone()
+    connection.close()
+
+    result = None
+    answer_text = None
+    if completed:
+        question = dict(question)
+        question["question"] = completed["question"]
+        answer_text = completed["answer"]
+        _, _, _, _, _, suggestions = evaluate_answer(
+            answer_text, "Web Developer"
+        )
+        result = {
+            "score": completed["score"],
+            "feedback": completed["feedback"],
+            "suggestions": suggestions,
+        }
+
+    return render_template(
+        "workspace.html",
+        name=session["name"],
+        active="challenge",
+        title="Daily Interview Challenge",
+        subtitle="Today's focused practice",
+        challenge=question,
+        challenge_result=result,
+        challenge_completed=bool(completed),
+        challenge_answer=answer_text
+    )
 
 
 @app.route("/settings", methods=["GET", "POST"])
