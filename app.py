@@ -173,6 +173,77 @@ def ask_copilot(message):
     return choices[0]["message"]["content"].strip()
 
 
+def generate_interview_questions(role, difficulty, count):
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured.")
+
+    payload = json.dumps({
+        "model": os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+        "temperature": 0.6,
+        "max_tokens": min(1500, count * 120),
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a professional technical interviewer. Generate only "
+                    "clear, role-relevant interview questions appropriate to the "
+                    "requested difficulty. Return a JSON object with one key, "
+                    '"questions", containing exactly the requested number of '
+                    "distinct question strings. Do not include answers or markdown."
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Role: {}\nDifficulty: {}\nNumber of questions: {}".format(
+                        role, difficulty, count
+                    )
+                )
+            }
+        ]
+    }).encode("utf-8")
+    api_request = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+    with urllib.request.urlopen(api_request, timeout=25) as response:
+        response_data = json.loads(response.read().decode("utf-8"))
+
+    choices = response_data.get("choices", [])
+    content = (
+        choices[0].get("message", {}).get("content")
+        if choices else None
+    )
+    if not content:
+        raise RuntimeError("The AI returned an empty question set.")
+
+    parsed = json.loads(content)
+    questions = parsed.get("questions") if isinstance(parsed, dict) else None
+    if not isinstance(questions, list):
+        raise ValueError("The AI response did not contain a question list.")
+
+    valid_questions = []
+    seen = set()
+    for question in questions:
+        if not isinstance(question, str):
+            continue
+        question = question.strip()
+        normalized = question.casefold()
+        if 12 <= len(question) <= 500 and normalized not in seen:
+            valid_questions.append(question)
+            seen.add(normalized)
+    if len(valid_questions) != count:
+        raise ValueError("The AI returned an incomplete question set.")
+    return valid_questions
+
+
 QUESTIONS = {
     "Python Developer": {
         "Beginner": [
@@ -847,9 +918,63 @@ def interview():
             )
             random.shuffle(interview_questions)
 
+        question_source = "Curated question set"
+        if os.environ.get("OPENAI_API_KEY"):
+            try:
+                generated_questions = generate_interview_questions(
+                    role, difficulty, question_count
+                )
+                generated_questions = [
+                    question for question in generated_questions
+                    if question not in completed_questions
+                ]
+                interview_questions = generated_questions[:question_count]
+
+                remaining = [
+                    question for question in question_pool
+                    if question not in interview_questions
+                ]
+                unseen_remaining = [
+                    question for question in remaining
+                    if question not in completed_questions
+                ]
+                previously_seen_remaining = [
+                    question for question in remaining
+                    if question in completed_questions
+                ]
+                random.shuffle(unseen_remaining)
+                random.shuffle(previously_seen_remaining)
+                candidates = unseen_remaining + previously_seen_remaining
+                interview_questions.extend(
+                    candidates[:question_count - len(interview_questions)]
+                )
+
+                if len(generated_questions) >= question_count:
+                    question_source = "AI-generated questions"
+                elif generated_questions:
+                    question_source = "AI and curated questions"
+                else:
+                    question_source = "Curated fallback"
+            except urllib.error.HTTPError as error:
+                app.logger.warning(
+                    "OpenAI question generation returned HTTP %s; using curated questions.",
+                    error.code
+                )
+                error.close()
+                question_source = "Curated fallback"
+                flash("AI question generation is unavailable; using curated questions.")
+            except (urllib.error.URLError, TimeoutError, ValueError, RuntimeError) as error:
+                app.logger.warning(
+                    "Could not generate interview questions; using curated questions: %s",
+                    error
+                )
+                question_source = "Curated fallback"
+                flash("AI question generation is unavailable; using curated questions.")
+
         session["role"] = role
         session["difficulty"] = difficulty
         session["interview_questions"] = interview_questions
+        session["question_source"] = question_source
         session["question_index"] = 0
         session["answers"] = []
         session["answer_time"] = answer_time
@@ -878,6 +1003,7 @@ def interview():
         total=len(questions),
         progress=round(index / len(questions) * 100),
         answer_time=session.get("answer_time", 120),
+        question_source=session.get("question_source", "Curated question set"),
         voice_enabled=bool(os.environ.get("OPENAI_API_KEY"))
     )
 
