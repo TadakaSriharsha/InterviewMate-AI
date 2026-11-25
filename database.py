@@ -82,5 +82,24 @@ def init_db():
         )
     """)
 
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS daily_challenges (
+            user_id INTEGER NOT NULL,
+            challenge_date TEXT NOT NULL,
+            interview_id INTEGER NOT NULL UNIQUE,
+            PRIMARY KEY (user_id, challenge_date),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (interview_id) REFERENCES interviews(id)
+        )
+    """)
+
+    connection.execute("""
+        INSERT OR IGNORE INTO daily_challenges (user_id, challenge_date, interview_id)
+        SELECT user_id, date(created_at), MAX(id)
+        FROM interviews
+        WHERE role = 'Daily Challenge' AND date(created_at) IS NOT NULL
+        GROUP BY user_id, date(created_at)
+    """)
+
     connection.commit()
     connection.close()

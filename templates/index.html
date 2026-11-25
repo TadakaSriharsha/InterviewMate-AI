@@ -3,71 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InterviewMate AI</title>
+    <meta name="description" content="Practice role-specific interview questions, improve your answers, and track your preparation with InterviewMate AI.">
+    <title>InterviewMate AI · Your personal interview coach</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="landing">
-
-<header>
-    <div class="logo">InterviewMate <span>AI</span></div>
-    <nav>
-        <a href="/">Home</a>
-        <a href="#features">Features</a>
-        <a href="/login">Login</a>
-        <a href="/register" class="button">Get Started</a>
-    </nav>
-</header>
-
-<section class="hero">
-    <div>
-        <p class="tag">YOUR PERSONAL INTERVIEW COACH</p>
-        <h1>Prepare Better.<br><span>Interview Smarter.</span></h1>
-
-        <p class="description">
-            Practice role-specific questions, choose your difficulty,
-            and build confidence one focused session at a time.
-        </p>
-
-        <a href="/register" class="button">Start Practicing</a>
-        <a href="/login" class="secondary-hero-link">Sign in to your workspace</a>
-    </div>
-
-    <div class="hero-card">
-        <div class="preview-heading"><div><span></span><span></span><span></span></div><small>Interview session</small></div>
-        <p class="preview-label">QUESTION 3 OF 5</p>
-        <h2>Describe a complex problem you solved with a technical solution.</h2>
-        <div class="preview-answer"><span></span><span></span><span></span></div>
-        <div class="preview-score"><span>Live scoring</span><strong>86</strong></div>
-    </div>
-</section>
-
-<section class="features" id="features">
-    <h2>Our Features</h2>
-
-    <div class="feature-container">
-        <div class="feature">
-            <span class="feature-number">01</span>
-            <h3>Role-specific practice</h3>
-            <p>Explore focused question sets for Python, web, and Java developer roles.</p>
+    {% set start_url = url_for('dashboard') if session.get('user_id') else url_for('register') %}
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="lp-header">
+        <a class="lp-logo" href="/" aria-label="InterviewMate AI home">
+            <span class="brand-mark">IM</span>
+            <span>InterviewMate <b>AI</b></span>
+        </a>
+        <nav class="lp-nav" aria-label="Main navigation">
+            <a href="#how-it-works">How it works</a>
+            <a href="#features">Features</a>
+            <a href="#faq">FAQ</a>
+        </nav>
+        <div class="lp-actions">
+            {% if session.get('user_id') %}
+            <a class="lp-text-link" href="{{ url_for('logout') }}">Sign out</a>
+            <a class="button" href="{{ start_url }}">Open workspace <span aria-hidden="true">→</span></a>
+            {% else %}
+            <a class="lp-text-link" href="{{ url_for('login') }}">Sign in</a>
+            <a class="button" href="{{ start_url }}">Start practicing <span aria-hidden="true">→</span></a>
+            {% endif %}
         </div>
+    </header>
 
-        <div class="feature">
-            <span class="feature-number">02</span>
-            <h3>Three difficulty levels</h3>
-            <p>Build from beginner fundamentals to intermediate and advanced scenarios.</p>
-        </div>
+    <main id="main-content">
+        <section class="lp-hero">
+            <div class="lp-hero-copy">
+                <p class="lp-kicker"><span class="lp-kicker-dot"></span> A calmer way to prepare</p>
+                <h1>Your AI-Powered <span>Personal Interview Coach.</span></h1>
+                <p class="lp-lede">Practice with focused questions, organize your answers, and learn from clear feedback—one session at a time.</p>
+                <div class="lp-hero-actions">
+                    <a class="button lp-primary" href="{{ start_url }}">Start practicing <span aria-hidden="true">→</span></a>
+                    <a class="lp-secondary" href="#features">Explore features <span aria-hidden="true">↓</span></a>
+                </div>
+                <ul class="lp-highlights" aria-label="Available practice options">
+                    <li><span aria-hidden="true">✓</span> Python, web, and Java roles</li>
+                    <li><span aria-hidden="true">✓</span> Beginner to advanced</li>
+                    <li><span aria-hidden="true">✓</span> Progress saved to your account</li>
+                </ul>
+            </div>
 
-        <div class="feature">
-            <span class="feature-number">03</span>
-            <h3>Fresh sets & progress</h3>
-            <p>Get five unique randomized questions, follow your progress, and review feedback.</p>
-        </div>
-    </div>
-</section>
+            <div class="lp-demo" aria-label="Illustration of an interview practice session">
+                <div class="lp-demo-top">
+                    <div class="lp-window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+                    <span>INTERVIEW PRACTICE</span>
+                    <span class="lp-demo-status"><i></i> SAMPLE</span>
+                </div>
+                <div class="lp-demo-body">
+                    <div class="lp-demo-meta"><span>PYTHON DEVELOPER</span><span>INTERMEDIATE</span></div>
+                    <div class="lp-demo-progress"><span></span></div>
+                    <p class="lp-demo-count">QUESTION 3 <span>OF 5</span></p>
+                    <h2>How would you design a cache with expiration and invalidation?</h2>
+                    <div class="lp-answer-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+                    <div class="lp-demo-note">
+                        <span class="lp-demo-note-icon" aria-hidden="true">✦</span>
+                        <p><strong>Practice at your pace</strong><br>Structure a response, then review your rubric-based feedback.</p>
+                    </div>
+                </div>
+                <div class="lp-demo-glow" aria-hidden="true"></div>
+            </div>
+        </section>
 
-<footer>
-    <p>© 2026 InterviewMate AI</p>
-</footer>
+        <section class="lp-section lp-how" id="how-it-works">
+            <div class="lp-section-heading">
+                <p class="lp-eyebrow">A SIMPLE ROUTINE</p>
+                <h2>Turn preparation into progress.</h2>
+                <p>Every tool is designed to help you take a practical next step.</p>
+            </div>
+            <div class="lp-steps">
+                <article class="lp-step">
+                    <span class="lp-step-number">01</span>
+                    <h3>Choose your focus</h3>
+                    <p>Pick a supported developer role, difficulty, and answer timer for your mock interview.</p>
+                </article>
+                <article class="lp-step">
+                    <span class="lp-step-number">02</span>
+                    <h3>Practice out loud or in text</h3>
+                    <p>Answer a short set of questions. Use text practice even when voice features are unavailable.</p>
+                </article>
+                <article class="lp-step">
+                    <span class="lp-step-number">03</span>
+                    <h3>Review and repeat</h3>
+                    <p>See a transparent answer rubric, keep your history, and choose what to practice next.</p>
+                </article>
+            </div>
+        </section>
 
+        <section class="lp-section lp-features" id="features">
+            <div class="lp-section-heading">
+                <p class="lp-eyebrow">YOUR PREPARATION WORKSPACE</p>
+                <h2>Useful tools. Clear expectations.</h2>
+                <p>Start with the practice you need, then build a routine that works for you.</p>
+            </div>
+            <div class="lp-feature-grid">
+                <a class="lp-feature-card" href="{{ url_for('studio') if session.get('user_id') else start_url }}">
+                    <span class="lp-feature-icon">◉</span>
+                    <h3>Mock interviews</h3>
+                    <p>Practice curated or AI-generated questions across Python, web, and Java developer tracks.</p>
+                    <span class="lp-card-link">Set up a session <b aria-hidden="true">↗</b></span>
+                </a>
+                <a class="lp-feature-card" href="{{ url_for('answer_studio') if session.get('user_id') else start_url }}">
+                    <span class="lp-feature-icon lp-icon-violet">✦</span>
+                    <h3>Answer feedback</h3>
+                    <p>Use a consistent rubric to spot opportunities to add detail, structure, and evidence.</p>
+                    <span class="lp-card-link">Explore answer studio <b aria-hidden="true">↗</b></span>
+                </a>
+                <a class="lp-feature-card" href="{{ url_for('dashboard') if session.get('user_id') else start_url }}">
+                    <span class="lp-feature-icon lp-icon-cyan">⌁</span>
+                    <h3>Progress dashboard</h3>
+                    <p>Review saved practice, recent scores, and activity based on your completed sessions.</p>
+                    <span class="lp-card-link">View your progress <b aria-hidden="true">↗</b></span>
+                </a>
+                <a class="lp-feature-card" href="{{ url_for('resume_lab') if session.get('user_id') else start_url }}">
+                    <span class="lp-feature-icon lp-icon-amber">▤</span>
+                    <h3>Resume and job tools</h3>
+                    <p>Paste text for a skill-keyword comparison and practical preparation suggestions.</p>
+                    <span class="lp-card-link">Prepare for a role <b aria-hidden="true">↗</b></span>
+                </a>
+                <a class="lp-feature-card" href="{{ url_for('questions') if session.get('user_id') else start_url }}">
+                    <span class="lp-feature-icon lp-icon-cyan">?</span>
+                    <h3>Question library</h3>
+                    <p>Search sample questions, view explanations, and save useful prompts to your account.</p>
+                    <span class="lp-card-link">Browse questions <b aria-hidden="true">↗</b></span>
+                </a>
+                <a class="lp-feature-card" href="{{ url_for('challenge') if session.get('user_id') else start_url }}">
+                    <span class="lp-feature-icon">⚡</span>
+                    <h3>Daily practice</h3>
+                    <p>Complete one challenge each day and return to review your saved feedback.</p>
+                    <span class="lp-card-link">Build a habit <b aria-hidden="true">↗</b></span>
+                </a>
+            </div>
+        </section>
+
+        <section class="lp-trust">
+            <div>
+                <p class="lp-eyebrow">HONEST BY DESIGN</p>
+                <h2>Feedback you can understand.</h2>
+            </div>
+            <p>Interview scores use a transparent text rubric—not emotion detection or personality judgments. AI question generation and voice tools are available when the service is configured; curated questions and text practice remain available as a fallback.</p>
+        </section>
+
+        <section class="lp-section lp-faq" id="faq">
+            <div class="lp-section-heading">
+                <p class="lp-eyebrow">GOOD TO KNOW</p>
+                <h2>Frequently asked questions</h2>
+            </div>
+            <div class="lp-faq-list">
+                <details>
+                    <summary>Do I need an AI API key to practice?</summary>
+                    <p>No. Curated questions and rubric-based text feedback work without an AI key. AI question generation, Copilot, and generated voice require the service to be configured by the site operator.</p>
+                </details>
+                <details>
+                    <summary>How are mock interview answers evaluated?</summary>
+                    <p>The current mock interview uses a transparent text rubric for completeness, clarity, relevance, evidence, and structure. It does not claim to measure confidence, emotion, or personality.</p>
+                </details>
+                <details>
+                    <summary>Can I upload a resume or execute code here?</summary>
+                    <p>Resume tools currently analyze text you paste into the page; file uploads are not enabled. Coding Arena reviews your approach without running submitted code on the application server.</p>
+                </details>
+            </div>
+        </section>
+
+        <section class="lp-final-cta">
+            <p class="lp-eyebrow">YOUR NEXT ANSWER STARTS HERE</p>
+            <h2>Make your next practice session count.</h2>
+            <p>Sign in to pick up your preparation or create an account to begin.</p>
+            <a class="button lp-primary" href="{{ start_url }}">Open InterviewMate <span aria-hidden="true">→</span></a>
+        </section>
+    </main>
+
+    <footer class="lp-footer">
+        <a class="lp-logo" href="/"><span class="brand-mark">IM</span><span>InterviewMate <b>AI</b></span></a>
+        <p>Thoughtful practice for your next interview.</p>
+        <a href="{{ url_for('login') if not session.get('user_id') else url_for('dashboard') }}">{{ 'Sign in' if not session.get('user_id') else 'Open workspace' }}</a>
+    </footer>
 </body>
 </html>
