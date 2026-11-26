@@ -37,6 +37,22 @@
             {% for message in messages %}<div class="toast">{{ message }}</div>{% endfor %}
         {% endwith %}
 
+        <section class="dashboard-hero panel">
+            <div class="dashboard-hero-copy">
+                <p class="eyebrow">YOUR NEXT BIG MOMENT STARTS HERE</p>
+                <h2>Build interview confidence, one answer at a time.</h2>
+                <p>Small, steady practice can take you a long way. Ready for your next question?</p>
+                <a class="button" href="/studio">Start a mock interview <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="dashboard-orbit-art" aria-hidden="true">
+                <span class="orbit-spark orbit-spark-one">✦</span>
+                <span class="orbit-spark orbit-spark-two">✧</span>
+                <div class="orbit-path orbit-path-one"><i></i></div>
+                <div class="orbit-path orbit-path-two"><i></i></div>
+                <div class="orbit-core">IM</div>
+            </div>
+        </section>
+
         <section class="metric-grid">
             <article class="metric-card readiness"><div class="metric-icon">◎</div><div><p>Interview readiness</p><strong>{{ stats.average_score or 0 }}<small>/100</small></strong></div><div class="mini-ring" style="--score: {{ stats.average_score or 0 }}"><span>{{ stats.average_score or 0 }}%</span></div></article>
             <article class="metric-card"><div class="metric-icon violet">✓</div><div><p>Interviews completed</p><strong>{{ interview_count }}</strong><small>Based on saved answers</small></div></article>
