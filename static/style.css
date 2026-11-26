@@ -199,3 +199,18 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,t
 @keyframes score-arrive{from{opacity:0;transform:scale(.88) rotate(-35deg)}to{opacity:1;transform:scale(1) rotate(0)}}
 @keyframes skeleton-shimmer{0%,100%{background-position:100% 50%}50%{background-position:0% 50%}}
 @keyframes toast-arrive{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.app-header h1{position:relative;width:fit-content}
+.app-header h1:after{display:block;width:48%;height:2px;margin-top:3px;border-radius:9px;background:linear-gradient(90deg,#6e82ff,#d17cff,#39dfcf,transparent);background-size:200% 100%;content:"";animation:gradient-shift 6s ease infinite}
+.copilot-panel{overflow:hidden}
+.copilot-panel:after{position:absolute;top:44px;right:-60px;width:210px;height:150px;border-radius:50%;background:conic-gradient(from 45deg,rgba(124,131,255,.25),rgba(209,124,255,.28),rgba(57,223,207,.2),rgba(124,131,255,.25));filter:blur(42px);pointer-events:none;content:"";animation:glow-breathe 8s ease-in-out infinite alternate}
+.copilot-panel>*{position:relative;z-index:1}
+.copilot-panel:before{z-index:2}
+.lp-demo-note-icon{animation:icon-drift 5s ease-in-out infinite}
+.lp-feature-icon,.recent-icon{transition:transform .25s ease,filter .25s ease}
+.lp-feature-card:hover .lp-feature-icon,.recommendations>a:hover .recent-icon{transform:rotate(-8deg) scale(1.1);filter:drop-shadow(0 0 8px rgba(209,124,255,.4))}
+.progress-fill{animation:progress-arrive 1s cubic-bezier(.2,.8,.2,1) both}
+.answer-timer:not(.timer-warning):not(.timer-expired){animation:timer-breathe 5s ease-in-out infinite}
+.lp-faq-list details[open]{border-color:rgba(209,124,255,.32);background:linear-gradient(120deg,rgba(124,131,255,.08),rgba(209,124,255,.06),rgba(18,26,55,.65))}
+@keyframes icon-drift{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-3px) rotate(8deg)}}
+@keyframes progress-arrive{from{width:0;filter:brightness(1.6)}to{filter:brightness(1)}}
+@keyframes timer-breathe{50%{border-color:rgba(124,131,255,.28);box-shadow:0 0 18px rgba(124,131,255,.06)}}
